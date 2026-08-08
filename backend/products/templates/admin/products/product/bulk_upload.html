@@ -1,0 +1,50 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <div style="max-width: 850px;">
+    <h1>Bulk Product Upload</h1>
+
+    <p>
+      Excel file upload karke multiple products create ya update karein.
+      Existing SKU milne par product update hoga.
+    </p>
+
+    <div
+      style="
+        background: #f8f8f8;
+        border: 1px solid #ddd;
+        padding: 16px;
+        margin: 20px 0;
+      "
+    >
+      <strong>Required columns:</strong>
+
+      <p style="margin-bottom: 0;">
+        sku, name, slug, brand, department, category, subcategory,
+        price, old_price, description, is_active, is_featured,
+        is_best_seller, is_trending, is_new_arrival,
+        is_clearance_sale, is_offer
+      </p>
+    </div>
+
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+
+      {{ form.as_p }}
+
+      <button
+        type="submit"
+        class="default"
+        style="padding: 10px 22px;"
+      >
+        Upload Products
+      </button>
+    </form>
+
+    <p style="margin-top: 25px;">
+      <a href="{% url 'admin:products_product_changelist' %}">
+        ← Back to products
+      </a>
+    </p>
+  </div>
+{% endblock %}

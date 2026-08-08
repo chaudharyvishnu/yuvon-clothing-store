@@ -1,0 +1,64 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <div style="max-width: 850px;">
+    <h1>Bulk Product Image Upload</h1>
+
+    <p>
+      ZIP file upload karke product main images aur
+      gallery images automatically attach karein.
+    </p>
+
+    <div
+      style="
+        background: #f8f8f8;
+        border: 1px solid #ddd;
+        padding: 16px;
+        margin: 20px 0;
+      "
+    >
+      <strong>Image naming format:</strong>
+
+      <p>
+        YUV-001.jpg → Main image
+      </p>
+
+      <p>
+        YUV-001_1.jpg → Gallery image 1
+      </p>
+
+      <p>
+        YUV-001_2.jpg → Gallery image 2
+      </p>
+
+      <p style="margin-bottom: 0;">
+        Supported formats: JPG, JPEG, PNG and WEBP
+      </p>
+    </div>
+
+    <form
+      method="post"
+      enctype="multipart/form-data"
+    >
+      {% csrf_token %}
+
+      {{ form.as_p }}
+
+      <button
+        type="submit"
+        class="default"
+        style="padding: 10px 22px;"
+      >
+        Upload Images
+      </button>
+    </form>
+
+    <p style="margin-top: 25px;">
+      <a
+        href="{% url 'admin:products_product_changelist' %}"
+      >
+        ← Back to products
+      </a>
+    </p>
+  </div>
+{% endblock %}

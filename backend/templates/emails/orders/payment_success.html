@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Payment Successful</title>
+</head>
+
+<body style="margin:0;padding:0;background:#f4f4f4;font-family:Arial,Helvetica,sans-serif;">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;padding:30px 0;">
+
+<tr>
+<td align="center">
+
+<table width="620" cellpadding="0" cellspacing="0"
+style="background:#ffffff;border-radius:8px;overflow:hidden;">
+
+<tr>
+
+<td
+style="
+background:#198754;
+color:white;
+padding:30px;
+text-align:center;
+">
+
+<h1 style="margin:0;">
+{{ site_name }}
+</h1>
+
+<h2 style="margin-top:15px;">
+Payment Successful
+</h2>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="padding:35px;">
+
+<p style="font-size:18px;">
+
+Hello
+<strong>{{ customer_name }}</strong>,
+
+</p>
+
+<p style="color:#555;font-size:15px;">
+
+We've successfully received your payment.
+
+</p>
+
+<div
+style="
+background:#f8fff8;
+border-left:5px solid #198754;
+padding:20px;
+margin:25px 0;
+">
+
+<h3 style="margin-top:0;color:#198754;">
+
+Payment Confirmed
+
+</h3>
+
+<p>
+
+Thank you for your payment.
+
+Your order is now being processed.
+
+</p>
+
+</div>
+
+<table
+width="100%"
+style="border-collapse:collapse;"
+>
+
+<tr>
+
+<td
+style="
+padding:12px;
+border-bottom:1px solid #eeeeee;
+">
+
+<b>Order Number</b>
+
+</td>
+
+<td
+style="
+padding:12px;
+border-bottom:1px solid #eeeeee;
+">
+
+{{ order_number }}
+
+</td>
+
+</tr>
+
+<tr>
+
+<td
+style="
+padding:12px;
+border-bottom:1px solid #eeeeee;
+">
+
+<b>Order Status</b>
+
+</td>
+
+<td
+style="
+padding:12px;
+border-bottom:1px solid #eeeeee;
+">
+
+{{ order_status }}
+
+</td>
+
+</tr>
+
+<tr>
+
+<td
+style="
+padding:12px;
+border-bottom:1px solid #eeeeee;
+">
+
+<b>Payment Status</b>
+
+</td>
+
+<td
+style="
+padding:12px;
+border-bottom:1px solid #eeeeee;
+color:#198754;
+font-weight:bold;
+">
+
+{{ payment_status }}
+
+</td>
+
+</tr>
+
+<tr>
+
+<td
+style="
+padding:12px;
+border-bottom:1px solid #eeeeee;
+">
+
+<b>Payment Method</b>
+
+</td>
+
+<td
+style="
+padding:12px;
+border-bottom:1px solid #eeeeee;
+">
+
+{{ payment_method }}
+
+</td>
+
+</tr>
+
+<tr>
+
+<td
+style="
+padding:12px;
+border-bottom:1px solid #eeeeee;
+">
+
+<b>Amount Paid</b>
+
+</td>
+
+<td
+style="
+padding:12px;
+border-bottom:1px solid #eeeeee;
+font-weight:bold;
+">
+
+{{ total_amount }}
+
+</td>
+
+</tr>
+
+<tr>
+
+<td
+style="
+padding:12px;
+border-bottom:1px solid #eeeeee;
+">
+
+<b>Payment Date</b>
+
+</td>
+
+<td
+style="
+padding:12px;
+border-bottom:1px solid #eeeeee;
+">
+
+{{ placed_at }}
+
+</td>
+
+</tr>
+
+</table>
+
+<br>
+
+<h3>
+
+Order Summary
+
+</h3>
+
+<table
+width="100%"
+border="1"
+style="
+border-collapse:collapse;
+margin-top:15px;
+">
+
+<tr style="background:#efefef;">
+
+<th
+style="padding:10px;"
+>
+
+Product
+
+</th>
+
+<th
+style="padding:10px;"
+>
+
+Qty
+
+</th>
+
+<th
+style="padding:10px;"
+>
+
+Amount
+
+</th>
+
+</tr>
+
+{% for item in items %}
+
+<tr>
+
+<td
+style="padding:10px;"
+>
+
+{{ item.product_name }}
+
+</td>
+
+<td
+align="center"
+style="padding:10px;"
+>
+
+{{ item.quantity }}
+
+</td>
+
+<td
+align="right"
+style="padding:10px;"
+>
+
+₹{{ item.total_price }}
+
+</td>
+
+</tr>
+
+{% endfor %}
+
+</table>
+
+<div
+style="
+text-align:center;
+margin-top:35px;
+">
+
+<a
+href="{{ frontend_url }}"
+style="
+background:#198754;
+color:white;
+padding:14px 28px;
+border-radius:6px;
+text-decoration:none;
+display:inline-block;
+font-weight:bold;
+">
+
+View My Order
+
+</a>
+
+</div>
+
+<hr style="margin-top:40px;">
+
+<p
+style="
+font-size:13px;
+color:#666;
+text-align:center;
+">
+
+Thank you for shopping with
+<strong>{{ site_name }}</strong>.
+
+</p>
+
+<p
+style="
+font-size:12px;
+color:#999;
+text-align:center;
+">
+
+This is an automated payment confirmation email.
+
+</p>
+
+</td>
+
+</tr>
+
+</table>
+
+</td>
+
+</tr>
+
+</table>
+
+</body>
+
+</html>

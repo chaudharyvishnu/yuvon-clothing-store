@@ -1,0 +1,577 @@
+/* =========================================================
+   Admin Dashboard
+========================================================= */
+
+.admin-dashboard-page {
+  min-height: 100vh;
+  padding: 28px;
+  background: #f7f7f5;
+  color: #1f2937;
+}
+
+
+/* =========================================================
+   Header
+========================================================= */
+
+.dashboard-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.dashboard-eyebrow {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+.dashboard-header h1 {
+  margin: 0;
+  font-size: 34px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: #111827;
+}
+
+.dashboard-subtitle {
+  margin: 8px 0 0;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.dashboard-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+
+/* =========================================================
+   Buttons
+========================================================= */
+
+.dashboard-button {
+  min-height: 42px;
+  padding: 10px 16px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.dashboard-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.dashboard-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.dashboard-button-primary {
+  background: #111827;
+  color: #ffffff;
+}
+
+.dashboard-button-primary:hover:not(:disabled) {
+  background: #000000;
+}
+
+.dashboard-button-secondary {
+  background: #ffffff;
+  color: #1f2937;
+  border-color: #d1d5db;
+}
+
+.dashboard-button-secondary:hover:not(:disabled) {
+  background: #f3f4f6;
+}
+
+
+/* =========================================================
+   Filter
+========================================================= */
+
+.dashboard-filter-card {
+  margin-bottom: 24px;
+  padding: 18px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+}
+
+.dashboard-filter-form {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.dashboard-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dashboard-filter-field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.dashboard-filter-field input {
+  min-width: 180px;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #111827;
+  font-size: 14px;
+  outline: none;
+}
+
+.dashboard-filter-field input:focus {
+  border-color: #6b7280;
+  box-shadow: 0 0 0 3px rgba(107, 114, 128, 0.12);
+}
+
+.dashboard-filter-actions {
+  display: flex;
+  gap: 10px;
+}
+
+
+/* =========================================================
+   State / Error
+========================================================= */
+
+.dashboard-state {
+  min-height: 260px;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  color: #6b7280;
+}
+
+.dashboard-error {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 14px;
+}
+
+
+/* =========================================================
+   Overview Cards
+========================================================= */
+
+.dashboard-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 26px;
+}
+
+.dashboard-stat-card {
+  padding: 20px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(17, 24, 39, 0.03);
+}
+
+.dashboard-stat-label {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 600;
+}
+
+.dashboard-stat-value {
+  display: block;
+  font-size: 25px;
+  line-height: 1.2;
+  color: #111827;
+}
+
+
+/* =========================================================
+   Sections
+========================================================= */
+
+.dashboard-section {
+  margin-bottom: 26px;
+}
+
+.dashboard-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.dashboard-section-header h2 {
+  margin: 0;
+  font-size: 18px;
+  color: #111827;
+}
+
+.dashboard-section-header p {
+  margin: 5px 0 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+
+/* =========================================================
+   Panels
+========================================================= */
+
+.dashboard-panel {
+  padding: 20px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(17, 24, 39, 0.025);
+}
+
+.dashboard-panel-label {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.dashboard-panel-value {
+  display: block;
+  margin-bottom: 14px;
+  font-size: 24px;
+  color: #111827;
+}
+
+.dashboard-panel-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.dashboard-growth {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #4b5563;
+}
+
+
+/* =========================================================
+   Sales Grid
+========================================================= */
+
+.dashboard-sales-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+}
+
+
+/* =========================================================
+   Columns
+========================================================= */
+
+.dashboard-two-column {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 26px;
+}
+
+.dashboard-three-column {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 26px;
+}
+
+
+/* =========================================================
+   List
+========================================================= */
+
+.dashboard-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid #f0f1f3;
+}
+
+.dashboard-list-row:last-child {
+  border-bottom: 0;
+}
+
+.dashboard-list-row > span {
+  color: #4b5563;
+  font-size: 14px;
+}
+
+.dashboard-list-row strong {
+  color: #111827;
+}
+
+.dashboard-list-value {
+  display: flex;
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.dashboard-list-value small {
+  color: #9ca3af;
+}
+
+
+/* =========================================================
+   Tables
+========================================================= */
+
+.dashboard-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.dashboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 600px;
+}
+
+.dashboard-table th {
+  padding: 11px 12px;
+  text-align: left;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 12px;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dashboard-table td {
+  padding: 13px 12px;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 13px;
+  color: #374151;
+  vertical-align: top;
+}
+
+.dashboard-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.dashboard-table tbody tr:hover {
+  background: #fafafa;
+}
+
+.dashboard-table td strong {
+  color: #111827;
+}
+
+.dashboard-table-subtext {
+  display: block;
+  margin-top: 4px;
+  color: #9ca3af;
+}
+
+
+/* =========================================================
+   Chart Placeholder
+========================================================= */
+
+.dashboard-chart-placeholder {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dashboard-chart-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f9fafb;
+}
+
+.dashboard-chart-row span {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.dashboard-chart-row strong {
+  font-size: 13px;
+  color: #111827;
+}
+
+
+/* =========================================================
+   Footer
+========================================================= */
+
+.dashboard-footer {
+  padding: 12px 0 4px;
+  text-align: right;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+
+/* =========================================================
+   Tablet
+========================================================= */
+
+@media (max-width: 1200px) {
+  .dashboard-stat-grid {
+    grid-template-columns: repeat(
+      3,
+      minmax(0, 1fr)
+    );
+  }
+
+  .dashboard-sales-grid {
+    grid-template-columns: repeat(
+      3,
+      minmax(0, 1fr)
+    );
+  }
+}
+
+
+/* =========================================================
+   Small Tablet
+========================================================= */
+
+@media (max-width: 900px) {
+  .admin-dashboard-page {
+    padding: 20px;
+  }
+
+  .dashboard-header {
+    flex-direction: column;
+  }
+
+  .dashboard-stat-grid {
+    grid-template-columns: repeat(
+      2,
+      minmax(0, 1fr)
+    );
+  }
+
+  .dashboard-sales-grid {
+    grid-template-columns: repeat(
+      2,
+      minmax(0, 1fr)
+    );
+  }
+
+  .dashboard-two-column,
+  .dashboard-three-column {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* =========================================================
+   Mobile
+========================================================= */
+
+@media (max-width: 600px) {
+  .admin-dashboard-page {
+    padding: 14px;
+  }
+
+  .dashboard-header h1 {
+    font-size: 27px;
+  }
+
+  .dashboard-stat-grid,
+  .dashboard-sales-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-filter-form {
+    align-items: stretch;
+  }
+
+  .dashboard-filter-field {
+    width: 100%;
+  }
+
+  .dashboard-filter-field input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .dashboard-filter-actions {
+    width: 100%;
+  }
+
+  .dashboard-filter-actions .dashboard-button {
+    flex: 1;
+  }
+
+  .dashboard-header-actions {
+    width: 100%;
+  }
+
+  .dashboard-header-actions .dashboard-button {
+    width: 100%;
+  }
+
+  .dashboard-panel {
+    padding: 16px;
+  }
+
+  .dashboard-stat-card {
+    padding: 17px;
+  }
+
+  .dashboard-stat-value,
+  .dashboard-panel-value {
+    font-size: 21px;
+  }
+
+  .dashboard-panel-meta {
+    flex-direction: column;
+  }
+
+  .dashboard-footer {
+    text-align: left;
+  }
+}   

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Order Status Updated</title>
+</head>
+
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:30px 0;">
+
+<tr>
+<td align="center">
+
+<table width="620" cellpadding="0" cellspacing="0"
+style="background:#ffffff;border-radius:8px;overflow:hidden;">
+
+<tr>
+<td style="background:#111111;color:#ffffff;padding:25px;text-align:center;">
+
+<h1 style="margin:0;">
+{{ site_name }}
+</h1>
+
+<p style="margin-top:10px;">
+Order Status Update
+</p>
+
+</td>
+</tr>
+
+<tr>
+
+<td style="padding:35px;">
+
+<p style="font-size:18px;">
+Hello
+<strong>{{ customer_name }}</strong>,
+</p>
+
+<p style="color:#555;font-size:15px;">
+Your order status has been updated.
+</p>
+
+<table width="100%"
+style="margin-top:25px;border-collapse:collapse;">
+
+<tr>
+<td style="padding:12px;border-bottom:1px solid #eeeeee;">
+<b>Order Number</b>
+</td>
+
+<td style="padding:12px;border-bottom:1px solid #eeeeee;">
+{{ order_number }}
+</td>
+</tr>
+
+<tr>
+<td style="padding:12px;border-bottom:1px solid #eeeeee;">
+<b>Current Status</b>
+</td>
+
+<td style="padding:12px;border-bottom:1px solid #eeeeee;color:#0b7d3e;font-weight:bold;">
+{{ order_status }}
+</td>
+</tr>
+
+<tr>
+<td style="padding:12px;border-bottom:1px solid #eeeeee;">
+<b>Payment Status</b>
+</td>
+
+<td style="padding:12px;border-bottom:1px solid #eeeeee;">
+{{ payment_status }}
+</td>
+</tr>
+
+<tr>
+<td style="padding:12px;border-bottom:1px solid #eeeeee;">
+<b>Payment Method</b>
+</td>
+
+<td style="padding:12px;border-bottom:1px solid #eeeeee;">
+{{ payment_method }}
+</td>
+</tr>
+
+<tr>
+<td style="padding:12px;border-bottom:1px solid #eeeeee;">
+<b>Total Amount</b>
+</td>
+
+<td style="padding:12px;border-bottom:1px solid #eeeeee;">
+{{ total_amount }}
+</td>
+</tr>
+
+{% if courier_name %}
+
+<tr>
+<td style="padding:12px;border-bottom:1px solid #eeeeee;">
+<b>Courier</b>
+</td>
+
+<td style="padding:12px;border-bottom:1px solid #eeeeee;">
+{{ courier_name }}
+</td>
+</tr>
+
+{% endif %}
+
+{% if tracking_id %}
+
+<tr>
+<td style="padding:12px;border-bottom:1px solid #eeeeee;">
+<b>Tracking ID</b>
+</td>
+
+<td style="padding:12px;border-bottom:1px solid #eeeeee;">
+{{ tracking_id }}
+</td>
+</tr>
+
+{% endif %}
+
+{% if estimated_delivery %}
+
+<tr>
+<td style="padding:12px;border-bottom:1px solid #eeeeee;">
+<b>Estimated Delivery</b>
+</td>
+
+<td style="padding:12px;border-bottom:1px solid #eeeeee;">
+{{ estimated_delivery }}
+</td>
+</tr>
+
+{% endif %}
+
+</table>
+
+<br>
+
+{% if tracking_id %}
+
+<div
+style="
+background:#f8f8f8;
+padding:20px;
+border-left:5px solid #111111;
+margin-top:20px;
+">
+
+<b>Tracking Information</b>
+
+<p style="margin-top:10px;">
+Use the tracking ID
+<strong>{{ tracking_id }}</strong>
+to track your shipment with
+<strong>{{ courier_name }}</strong>.
+</p>
+
+</div>
+
+{% endif %}
+
+<div
+style="
+text-align:center;
+margin-top:35px;
+">
+
+<a
+href="{{ frontend_url }}"
+style="
+background:#111111;
+color:#ffffff;
+text-decoration:none;
+padding:14px 30px;
+display:inline-block;
+border-radius:6px;
+font-weight:bold;
+">
+
+View My Orders
+
+</a>
+
+</div>
+
+<hr style="margin-top:40px;">
+
+<p
+style="
+font-size:13px;
+color:#777777;
+text-align:center;
+">
+
+Thank you for shopping with
+<strong>{{ site_name }}</strong> ❤️
+
+</p>
+
+<p
+style="
+font-size:12px;
+color:#999999;
+text-align:center;
+">
+
+This is an automated email.
+Please do not reply directly.
+
+</p>
+
+</td>
+
+</tr>
+
+</table>
+
+</td>
+
+</tr>
+
+</table>
+
+</body>
+</html>

@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>New Order Received</title>
+</head>
+
+<body style="margin:0;padding:0;background:#f4f4f4;font-family:Arial,Helvetica,sans-serif;">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;padding:30px 0;">
+
+    <tr>
+        <td align="center">
+
+            <table width="680" cellpadding="0" cellspacing="0"
+                style="background:#ffffff;border-radius:8px;overflow:hidden;">
+
+                <tr>
+                    <td style="background:#111111;color:#ffffff;padding:28px;text-align:center;">
+
+                        <h1 style="margin:0;">
+                            {{ site_name }}
+                        </h1>
+
+                        <h2 style="margin:12px 0 0;">
+                            New Order Received
+                        </h2>
+
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="padding:35px;">
+
+                        <p style="font-size:16px;color:#444444;">
+                            A new order has been placed on the store.
+                        </p>
+
+                        <div style="
+                            background:#f8f8f8;
+                            border-left:5px solid #111111;
+                            padding:18px;
+                            margin:22px 0;
+                        ">
+
+                            <strong>Order Number:</strong>
+                            {{ order_number }}
+
+                            <br><br>
+
+                            <strong>Placed At:</strong>
+                            {{ placed_at }}
+
+                        </div>
+
+                        <h3 style="margin-top:30px;">
+                            Customer Details
+                        </h3>
+
+                        <table width="100%" cellpadding="10" cellspacing="0"
+                            style="border-collapse:collapse;">
+
+                            <tr>
+                                <td style="border-bottom:1px solid #eeeeee;">
+                                    <strong>Name</strong>
+                                </td>
+
+                                <td style="border-bottom:1px solid #eeeeee;">
+                                    {{ customer_name }}
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td style="border-bottom:1px solid #eeeeee;">
+                                    <strong>Email</strong>
+                                </td>
+
+                                <td style="border-bottom:1px solid #eeeeee;">
+                                    {% if customer_email %}
+                                        {{ customer_email }}
+                                    {% else %}
+                                        Not available
+                                    {% endif %}
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td style="border-bottom:1px solid #eeeeee;">
+                                    <strong>Phone</strong>
+                                </td>
+
+                                <td style="border-bottom:1px solid #eeeeee;">
+                                    {{ order.phone|default:"Not available" }}
+                                </td>
+                            </tr>
+
+                        </table>
+
+                        <h3 style="margin-top:30px;">
+                            Delivery Address
+                        </h3>
+
+                        <div style="
+                            background:#fafafa;
+                            border:1px solid #eeeeee;
+                            padding:18px;
+                            line-height:1.7;
+                        ">
+
+                            <strong>{{ order.full_name }}</strong><br>
+
+                            {{ order.address_line_1 }}
+
+                            {% if order.address_line_2 %}
+                                <br>{{ order.address_line_2 }}
+                            {% endif %}
+
+                            {% if order.landmark %}
+                                <br>Landmark: {{ order.landmark }}
+                            {% endif %}
+
+                            <br>
+
+                            {{ order.city }},
+                            {{ order.state }}
+                            - {{ order.postal_code }}
+
+                            <br>
+
+                            {{ order.country }}
+
+                            <br>
+
+                            Phone: {{ order.phone }}
+
+                            {% if order.alternate_phone %}
+                                <br>
+                                Alternate Phone:
+                                {{ order.alternate_phone }}
+                            {% endif %}
+
+                        </div>
+
+                        <h3 style="margin-top:30px;">
+                            Order Items
+                        </h3>
+
+                        <table width="100%" cellpadding="10" cellspacing="0"
+                            style="border-collapse:collapse;border:1px solid #dddddd;">
+
+                            <tr style="background:#111111;color:#ffffff;">
+
+                                <th align="left">
+                                    Product
+                                </th>
+
+                                <th align="center">
+                                    Variant
+                                </th>
+
+                                <th align="center">
+                                    Qty
+                                </th>
+
+                                <th align="right">
+                                    Price
+                                </th>
+
+                                <th align="right">
+                                    Total
+                                </th>
+
+                            </tr>
+
+                            {% for item in items %}
+
+                                <tr>
+
+                                    <td style="border-bottom:1px solid #eeeeee;">
+
+                                        <strong>
+                                            {{ item.product_name }}
+                                        </strong>
+
+                                        {% if item.product_sku %}
+                                            <br>
+                                            <span style="font-size:12px;color:#777777;">
+                                                SKU: {{ item.product_sku }}
+                                            </span>
+                                        {% endif %}
+
+                                    </td>
+
+                                    <td align="center"
+                                        style="border-bottom:1px solid #eeeeee;">
+
+                                        {% if item.size %}
+                                            Size: {{ item.size }}
+                                        {% endif %}
+
+                                        {% if item.color %}
+                                            {% if item.size %}
+                                                <br>
+                                            {% endif %}
+
+                                            Color: {{ item.color }}
+                                        {% endif %}
+
+                                        {% if not item.size and not item.color %}
+                                            -
+                                        {% endif %}
+
+                                    </td>
+
+                                    <td align="center"
+                                        style="border-bottom:1px solid #eeeeee;">
+
+                                        {{ item.quantity }}
+
+                                    </td>
+
+                                    <td align="right"
+                                        style="border-bottom:1px solid #eeeeee;">
+
+                                        ₹{{ item.unit_price }}
+
+                                    </td>
+
+                                    <td align="right"
+                                        style="border-bottom:1px solid #eeeeee;">
+
+                                        <strong>
+                                            ₹{{ item.total_price }}
+                                        </strong>
+
+                                    </td>
+
+                                </tr>
+
+                            {% empty %}
+
+                                <tr>
+                                    <td colspan="5"
+                                        align="center"
+                                        style="padding:20px;color:#777777;">
+
+                                        No order items found.
+
+                                    </td>
+                                </tr>
+
+                            {% endfor %}
+
+                        </table>
+
+                        <h3 style="margin-top:30px;">
+                            Payment & Order Summary
+                        </h3>
+
+                        <table width="100%" cellpadding="10" cellspacing="0"
+                            style="border-collapse:collapse;">
+
+                            <tr>
+                                <td style="border-bottom:1px solid #eeeeee;">
+                                    <strong>Order Status</strong>
+                                </td>
+
+                                <td align="right"
+                                    style="border-bottom:1px solid #eeeeee;">
+
+                                    {{ order_status }}
+
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td style="border-bottom:1px solid #eeeeee;">
+                                    <strong>Payment Method</strong>
+                                </td>
+
+                                <td align="right"
+                                    style="border-bottom:1px solid #eeeeee;">
+
+                                    {{ payment_method }}
+
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td style="border-bottom:1px solid #eeeeee;">
+                                    <strong>Payment Status</strong>
+                                </td>
+
+                                <td align="right"
+                                    style="border-bottom:1px solid #eeeeee;">
+
+                                    {{ payment_status }}
+
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td style="border-bottom:1px solid #eeeeee;">
+                                    Subtotal
+                                </td>
+
+                                <td align="right"
+                                    style="border-bottom:1px solid #eeeeee;">
+
+                                    {{ subtotal }}
+
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td style="border-bottom:1px solid #eeeeee;">
+                                    Discount
+                                </td>
+
+                                <td align="right"
+                                    style="border-bottom:1px solid #eeeeee;">
+
+                                    {{ discount_amount }}
+
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td style="border-bottom:1px solid #eeeeee;">
+                                    Shipping Charge
+                                </td>
+
+                                <td align="right"
+                                    style="border-bottom:1px solid #eeeeee;">
+
+                                    {{ shipping_charge }}
+
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td style="border-bottom:1px solid #eeeeee;">
+                                    Tax
+                                </td>
+
+                                <td align="right"
+                                    style="border-bottom:1px solid #eeeeee;">
+
+                                    {{ tax_amount }}
+
+                                </td>
+                            </tr>
+
+                            <tr style="font-size:18px;">
+                                <td style="padding-top:16px;">
+                                    <strong>Grand Total</strong>
+                                </td>
+
+                                <td align="right"
+                                    style="padding-top:16px;">
+
+                                    <strong>
+                                        {{ total_amount }}
+                                    </strong>
+
+                                </td>
+                            </tr>
+
+                        </table>
+
+                        {% if order.customer_note %}
+
+                            <h3 style="margin-top:30px;">
+                                Customer Note
+                            </h3>
+
+                            <div style="
+                                background:#fff8e1;
+                                border-left:5px solid #f0ad4e;
+                                padding:16px;
+                            ">
+
+                                {{ order.customer_note }}
+
+                            </div>
+
+                        {% endif %}
+
+                        <div style="text-align:center;margin-top:35px;">
+
+                            <a href="{{ frontend_url }}"
+                                style="
+                                    background:#111111;
+                                    color:#ffffff;
+                                    text-decoration:none;
+                                    padding:14px 28px;
+                                    border-radius:6px;
+                                    display:inline-block;
+                                    font-weight:bold;
+                                ">
+
+                                Open Store
+
+                            </a>
+
+                        </div>
+
+                        <hr style="margin-top:40px;border:0;border-top:1px solid #eeeeee;">
+
+                        <p style="
+                            font-size:12px;
+                            color:#888888;
+                            text-align:center;
+                        ">
+
+                            This is an automated new-order notification from
+                            {{ site_name }}.
+
+                        </p>
+
+                    </td>
+                </tr>
+
+            </table>
+
+        </td>
+    </tr>
+
+</table>
+
+</body>
+</html>
