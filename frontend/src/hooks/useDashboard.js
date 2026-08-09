@@ -5,7 +5,7 @@ import {
   useState,
 } from "react";
 
-import dashboardService from "../services/dashboardService";
+import dashboardService from "../services/dashboardservice";
 
 
 const EMPTY_FILTERS = {
