@@ -20,12 +20,12 @@ import Testimonials from "./components/home/Testimonials";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import AdminRoute from "./components/auth/AdminRoute";
 
-import Shop from "./pages/Shop";
-import ProductDetails from "./pages/ProductDetails";
+import Shop from "./pages/shop";
+import ProductDetails from "./pages/productdetails";
 import Wishlist from "./pages/Wishlist";
 import NewArrivals from "./pages/NewArrivals";
 import Offers from "./pages/Offers";
-import Support from "./pages/Support";
+import Support from "./pages/support";
 import TrackOrder from "./pages/TrackOrder";
 import JoinYuvon from "./pages/JoinYuvon";
 import ReturnExchange from "./pages/ReturnExchange";
@@ -57,13 +57,11 @@ import {
 import CartDrawer from "./components/cart/CartDrawer";
 import LoginDrawer from "./components/auth/LoginDrawer";
 
-
 function App() {
   return (
     <AuthProvider>
       <CartProvider>
         <WishlistProvider>
-
           <Navbar />
 
           <CartDrawer />
@@ -71,7 +69,6 @@ function App() {
           <LoginDrawer />
 
           <Routes>
-
             <Route
               path="/"
               element={
@@ -96,12 +93,16 @@ function App() {
 
             <Route
               path="/product/:id"
-              element={<ProductDetails />}
+              element={
+                <ProductDetails />
+              }
             />
 
             <Route
               path="/wishlist"
-              element={<Wishlist />}
+              element={
+                <Wishlist />
+              }
             />
 
             <Route
@@ -169,52 +170,72 @@ function App() {
 
             <Route
               path="/about-us"
-              element={<AboutUs />}
+              element={
+                <AboutUs />
+              }
             />
 
             <Route
               path="/privacy-policy"
-              element={<PrivacyPolicy />}
+              element={
+                <PrivacyPolicy />
+              }
             />
 
             <Route
               path="/shipping-policy"
-              element={<ShippingPolicy />}
+              element={
+                <ShippingPolicy />
+              }
             />
 
             <Route
               path="/new-arrivals"
-              element={<NewArrivals />}
+              element={
+                <NewArrivals />
+              }
             />
 
             <Route
               path="/offers"
-              element={<Offers />}
+              element={
+                <Offers />
+              }
             />
 
             <Route
               path="/clearance-sale"
-              element={<ClearanceSale />}
+              element={
+                <ClearanceSale />
+              }
             />
 
             <Route
               path="/support"
-              element={<Support />}
+              element={
+                <Support />
+              }
             />
 
             <Route
               path="/track-order"
-              element={<TrackOrder />}
+              element={
+                <TrackOrder />
+              }
             />
 
             <Route
               path="/join-yuvon"
-              element={<JoinYuvon />}
+              element={
+                <JoinYuvon />
+              }
             />
 
             <Route
               path="/return-exchange"
-              element={<ReturnExchange />}
+              element={
+                <ReturnExchange />
+              }
             />
 
             <Route
@@ -242,11 +263,9 @@ function App() {
                 </div>
               }
             />
-
           </Routes>
 
           <Footer />
-
         </WishlistProvider>
       </CartProvider>
     </AuthProvider>
