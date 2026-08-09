@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -16,6 +17,7 @@ import {
 } from "../services/api";
 
 const BACKEND_URL =
+  import.meta.env.VITE_BACKEND_URL ||
   "http://127.0.0.1:8000";
 
 const STATUS_LABELS = {
@@ -129,10 +131,13 @@ function formatDate(value) {
     return "—";
   }
 
-  const date = new Date(value);
+  const date =
+    new Date(value);
 
   if (
-    Number.isNaN(date.getTime())
+    Number.isNaN(
+      date.getTime()
+    )
   ) {
     return value;
   }
@@ -147,9 +152,9 @@ function formatDate(value) {
 }
 
 function formatMoney(value) {
-  return Number(value || 0).toFixed(
-    2
-  );
+  return Number(
+    value || 0
+  ).toFixed(2);
 }
 
 function formatApiError(error) {
@@ -161,12 +166,15 @@ function formatApiError(error) {
   }
 
   if (
-    typeof error.data === "string"
+    typeof error.data ===
+    "string"
   ) {
     return error.data;
   }
 
-  if (error.data.detail) {
+  if (
+    error.data.detail
+  ) {
     return String(
       error.data.detail
     );
@@ -175,19 +183,23 @@ function formatApiError(error) {
   return Object.entries(
     error.data
   )
-    .map(([field, messages]) => {
-      if (
-        Array.isArray(messages)
-      ) {
-        return `${field}: ${messages.join(
-          " "
+    .map(
+      ([field, messages]) => {
+        if (
+          Array.isArray(
+            messages
+          )
+        ) {
+          return `${field}: ${messages.join(
+            " "
+          )}`;
+        }
+
+        return `${field}: ${String(
+          messages
         )}`;
       }
-
-      return `${field}: ${String(
-        messages
-      )}`;
-    })
+    )
     .join(" ");
 }
 
@@ -197,9 +209,15 @@ function getImageUrl(image) {
   }
 
   if (
-    image.startsWith("http://") ||
-    image.startsWith("https://") ||
-    image.startsWith("data:")
+    image.startsWith(
+      "http://"
+    ) ||
+    image.startsWith(
+      "https://"
+    ) ||
+    image.startsWith(
+      "data:"
+    )
   ) {
     return image;
   }
@@ -213,7 +231,9 @@ function getImageUrl(image) {
 
 function getOrderItems(order) {
   if (
-    Array.isArray(order?.items)
+    Array.isArray(
+      order?.items
+    )
   ) {
     return order.items;
   }
@@ -234,68 +254,95 @@ function OrderDetails() {
     orderNumber,
   } = useParams();
 
-  const navigate = useNavigate();
+  const navigate =
+    useNavigate();
 
-  const [order, setOrder] =
-    useState(null);
+  const [
+    order,
+    setOrder,
+  ] = useState(null);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
 
-  const [error, setError] =
-    useState("");
+  const [
+    error,
+    setError,
+  ] = useState("");
 
   const [
     cancelling,
     setCancelling,
   ] = useState(false);
 
-  const loadOrder = async () => {
-    setLoading(true);
-    setError("");
+  const loadOrder =
+    useCallback(
+      async () => {
+        if (!orderNumber) {
+          setOrder(null);
+          setError(
+            "Order number is missing."
+          );
+          setLoading(false);
+          return;
+        }
 
-    try {
-      const response =
-        await fetchOrder(
-          orderNumber
-        );
+        setLoading(true);
+        setError("");
 
-      setOrder(
-        response.order ||
-          response
-      );
-    } catch (fetchError) {
-      console.error(
-        "Order details error:",
-        fetchError
-      );
+        try {
+          const response =
+            await fetchOrder(
+              orderNumber
+            );
 
-      setError(
-        formatApiError(
-          fetchError
-        )
-      );
+          setOrder(
+            response?.order ||
+              response
+          );
+        } catch (fetchError) {
+          console.error(
+            "Order details error:",
+            fetchError
+          );
 
-      setOrder(null);
-    } finally {
-      setLoading(false);
-    }
-  };
+          setError(
+            formatApiError(
+              fetchError
+            )
+          );
+
+          setOrder(null);
+        } finally {
+          setLoading(false);
+        }
+      },
+      [orderNumber]
+    );
 
   useEffect(() => {
     loadOrder();
-  }, [orderNumber]);
+  }, [loadOrder]);
 
-  const items = useMemo(
-    () => getOrderItems(order),
-    [order]
-  );
+  const items =
+    useMemo(
+      () =>
+        getOrderItems(
+          order
+        ),
+      [order]
+    );
 
   const status =
-    order?.status || "pending";
+    order?.status ||
+    "pending";
 
   const currentStatusIndex =
-    STATUS_INDEX[status] ?? -1;
+    STATUS_INDEX[
+      status
+    ] ?? -1;
 
   const canCancel =
     CANCELLABLE_STATUSES.has(
@@ -303,98 +350,107 @@ function OrderDetails() {
     );
 
   const isCancelled =
-    status === "cancelled";
+    status ===
+    "cancelled";
 
-  const fullAddress = useMemo(() => {
-    if (!order) {
-      return "";
-    }
+  const fullAddress =
+    useMemo(() => {
+      if (!order) {
+        return "";
+      }
 
-    if (order.full_address) {
-      return order.full_address;
-    }
+      if (
+        order.full_address
+      ) {
+        return order.full_address;
+      }
 
-    return [
-      order.address_line_1,
-      order.address_line_2,
-      order.landmark,
-      order.city,
-      order.state,
-      order.postal_code,
-      order.country,
-    ]
-      .filter(Boolean)
-      .join(", ");
-  }, [order]);
+      return [
+        order.address_line_1,
+        order.address_line_2,
+        order.landmark,
+        order.city,
+        order.state,
+        order.postal_code,
+        order.country,
+      ]
+        .filter(Boolean)
+        .join(", ");
+    }, [order]);
 
-  const handleCancel = async () => {
-    if (!order) {
-      return;
-    }
+  const handleCancel =
+    async () => {
+      if (!order) {
+        return;
+      }
 
-    const confirmed =
-      window.confirm(
-        `Cancel order ${
-          order.order_number ||
-          orderNumber
-        }?`
-      );
-
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      setCancelling(true);
-
-      const response =
-        await cancelOrder(
-          order.order_number ||
+      const confirmed =
+        window.confirm(
+          `Cancel order ${
+            order.order_number ||
             orderNumber
+          }?`
         );
 
-      const updatedOrder =
-        response.order || {
-          ...order,
-          status:
-            response.status ||
-            "cancelled",
-          cancelled_at:
-            response.cancelled_at ||
-            new Date().toISOString(),
-        };
+      if (!confirmed) {
+        return;
+      }
 
-      setOrder((current) => ({
-        ...current,
-        ...updatedOrder,
-      }));
+      try {
+        setCancelling(
+          true
+        );
 
-      alert(
-        response.message ||
-          "Order cancelled successfully."
-      );
-    } catch (cancelError) {
-      console.error(
-        "Order cancellation error:",
-        cancelError
-      );
+        const response =
+          await cancelOrder(
+            order.order_number ||
+              orderNumber
+          );
 
-      alert(
-        formatApiError(
+        const updatedOrder =
+          response?.order || {
+            ...order,
+            status:
+              response?.status ||
+              "cancelled",
+            cancelled_at:
+              response?.cancelled_at ||
+              new Date().toISOString(),
+          };
+
+        setOrder(
+          (current) => ({
+            ...current,
+            ...updatedOrder,
+          })
+        );
+
+        window.alert(
+          response?.message ||
+            "Order cancelled successfully."
+        );
+      } catch (cancelError) {
+        console.error(
+          "Order cancellation error:",
           cancelError
-        )
-      );
-    } finally {
-      setCancelling(false);
-    }
-  };
+        );
+
+        window.alert(
+          formatApiError(
+            cancelError
+          )
+        );
+      } finally {
+        setCancelling(
+          false
+        );
+      }
+    };
 
   if (loading) {
     return (
-      <section className="min-h-screen bg-gray-50 py-12">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="h-10 w-48 animate-pulse rounded bg-gray-200" />
-
+      <section className="min-h-screen bg-gray-50 px-4 py-10 sm:px-6">
+        <div className="mx-auto max-w-6xl">
           <div className="mt-8 space-y-6">
             <div className="h-48 animate-pulse rounded-3xl bg-white" />
             <div className="h-72 animate-pulse rounded-3xl bg-white" />
@@ -405,10 +461,13 @@ function OrderDetails() {
     );
   }
 
-  if (error || !order) {
+  if (
+    error ||
+    !order
+  ) {
     return (
-      <section className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-        <div className="max-w-lg rounded-3xl border bg-white p-10 text-center shadow-sm">
+      <section className="min-h-screen bg-gray-50 px-4 py-10 sm:px-6">
+        <div className="mx-auto max-w-4xl rounded-3xl bg-white p-8 text-center shadow-sm">
           <div className="text-5xl">
             📦
           </div>
@@ -425,7 +484,9 @@ function OrderDetails() {
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
             <button
               type="button"
-              onClick={loadOrder}
+              onClick={
+                loadOrder
+              }
               className="rounded-full bg-blue-600 px-6 py-3 font-semibold text-white"
             >
               Try Again
@@ -444,12 +505,14 @@ function OrderDetails() {
   }
 
   return (
-    <section className="min-h-screen bg-gray-50 py-12">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+    <section className="min-h-screen bg-gray-50 px-4 py-10 sm:px-6">
+      <div className="mx-auto max-w-6xl">
         <button
           type="button"
           onClick={() =>
-            navigate("/my-orders")
+            navigate(
+              "/my-orders"
+            )
           }
           className="font-semibold text-blue-600 hover:text-blue-700"
         >
@@ -488,7 +551,8 @@ function OrderDetails() {
               >
                 {STATUS_LABELS[
                   status
-                ] || status}
+                ] ||
+                  status}
               </span>
 
               <span className="text-2xl font-bold text-blue-600">
@@ -547,10 +611,14 @@ function OrderDetails() {
               <p className="mt-1 font-semibold">
                 {order.total_items ||
                   items.reduce(
-                    (total, item) =>
+                    (
+                      total,
+                      item
+                    ) =>
                       total +
                       Number(
-                        item.quantity || 1
+                        item.quantity ||
+                          1
                       ),
                     0
                   )}{" "}
@@ -561,6 +629,7 @@ function OrderDetails() {
         </div>
 
         {/* Order Timeline */}
+
         <div className="mt-8 rounded-3xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -581,7 +650,8 @@ function OrderDetails() {
                     order.order_number ||
                       orderNumber
                   )}&phone=${encodeURIComponent(
-                    order.phone || ""
+                    order.phone ||
+                      ""
                   )}`
                 )
               }
@@ -607,7 +677,10 @@ function OrderDetails() {
           ) : (
             <div className="mt-8 space-y-0">
               {ORDER_STEPS.map(
-                (step, index) => {
+                (
+                  step,
+                  index
+                ) => {
                   const completed =
                     currentStatusIndex >=
                     index;
@@ -618,7 +691,9 @@ function OrderDetails() {
 
                   return (
                     <div
-                      key={step.key}
+                      key={
+                        step.key
+                      }
                       className="flex gap-5"
                     >
                       <div className="flex flex-col items-center">
@@ -631,7 +706,8 @@ function OrderDetails() {
                         >
                           {completed
                             ? "✓"
-                            : index + 1}
+                            : index +
+                              1}
                         </div>
 
                         {index !==
@@ -657,7 +733,9 @@ function OrderDetails() {
                                 : "text-gray-400"
                             }`}
                           >
-                            {step.title}
+                            {
+                              step.title
+                            }
                           </h3>
 
                           {current && (
@@ -674,7 +752,9 @@ function OrderDetails() {
                               : "text-gray-400"
                           }`}
                         >
-                          {step.description}
+                          {
+                            step.description
+                          }
                         </p>
                       </div>
                     </div>
@@ -686,19 +766,24 @@ function OrderDetails() {
         </div>
 
         {/* Ordered Items */}
+
         <div className="mt-8 rounded-3xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
           <h2 className="text-2xl font-bold">
             Ordered Items
           </h2>
 
-          {items.length === 0 ? (
+          {items.length ===
+          0 ? (
             <p className="mt-5 rounded-2xl bg-gray-50 p-6 text-center text-gray-500">
               No order items found.
             </p>
           ) : (
             <div className="mt-6 space-y-4">
               {items.map(
-                (item, index) => {
+                (
+                  item,
+                  index
+                ) => {
                   const image =
                     item.product_image ||
                     item.image ||
@@ -710,16 +795,19 @@ function OrderDetails() {
 
                   const productId =
                     item.product_id ||
-                    item.product?.id;
+                    item.product
+                      ?.id;
 
                   const itemTotal =
                     item.total_price ||
                     item.subtotal ||
                     Number(
-                      item.price || 0
+                      item.price ||
+                        0
                     ) *
                       Number(
-                        item.quantity || 1
+                        item.quantity ||
+                          1
                       );
 
                   return (
@@ -779,7 +867,9 @@ function OrderDetails() {
                           {item.size && (
                             <span>
                               Size:{" "}
-                              {item.size}
+                              {
+                                item.size
+                              }
                             </span>
                           )}
 
@@ -859,6 +949,7 @@ function OrderDetails() {
         </div>
 
         {/* Shipping & Summary */}
+
         <div className="mt-8 grid gap-8 lg:grid-cols-2">
           <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
             <h2 className="text-2xl font-bold">
@@ -871,7 +962,8 @@ function OrderDetails() {
             </p>
 
             <p className="mt-2 leading-7 text-gray-600">
-              {fullAddress || "—"}
+              {fullAddress ||
+                "—"}
             </p>
 
             {order.phone && (
@@ -898,7 +990,9 @@ function OrderDetails() {
 
             <div className="mt-5 space-y-4">
               <div className="flex justify-between text-gray-600">
-                <span>Subtotal</span>
+                <span>
+                  Subtotal
+                </span>
 
                 <span>
                   ₹
@@ -922,7 +1016,9 @@ function OrderDetails() {
               </div>
 
               <div className="flex justify-between text-gray-600">
-                <span>Discount</span>
+                <span>
+                  Discount
+                </span>
 
                 <span className="text-green-600">
                   -₹
@@ -947,7 +1043,9 @@ function OrderDetails() {
               )}
 
               <div className="flex justify-between border-t pt-4 text-lg font-bold">
-                <span>Total</span>
+                <span>
+                  Total
+                </span>
 
                 <span className="text-blue-600">
                   ₹
@@ -965,7 +1063,9 @@ function OrderDetails() {
                 onClick={
                   handleCancel
                 }
-                disabled={cancelling}
+                disabled={
+                  cancelling
+                }
                 className="mt-6 w-full rounded-full border border-red-500 py-3 font-semibold text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {cancelling

@@ -14,9 +14,7 @@ import {
   registerUser,
 } from "../services/api";
 
-
 const AuthContext = createContext(null);
-
 
 /* =========================================================
    Local Storage Keys
@@ -25,7 +23,6 @@ const AuthContext = createContext(null);
 const ACCESS_TOKEN = "yuvon_access_token";
 const REFRESH_TOKEN = "yuvon_refresh_token";
 const USER_DATA = "yuvon_user";
-
 
 /* =========================================================
    Storage Helpers
@@ -41,7 +38,6 @@ const getStoredAccessToken = () => {
   );
 };
 
-
 const getStoredRefreshToken = () => {
   return (
     localStorage.getItem(REFRESH_TOKEN) ||
@@ -50,7 +46,6 @@ const getStoredRefreshToken = () => {
     ""
   );
 };
-
 
 const storeAccessToken = (token) => {
   if (!token) {
@@ -64,16 +59,14 @@ const storeAccessToken = (token) => {
 
   /*
    * Compatibility alias.
-   *
-   * dashboardService.js currently checks
-   * the "access" key as well.
+   * Some services may still read
+   * the "access" key.
    */
   localStorage.setItem(
     "access",
     token
   );
 };
-
 
 const storeRefreshToken = (token) => {
   if (!token) {
@@ -91,7 +84,6 @@ const storeRefreshToken = (token) => {
   );
 };
 
-
 /* =========================================================
    Auth Provider
 ========================================================= */
@@ -103,32 +95,32 @@ export function AuthProvider({
      User
   ------------------------------------------------------- */
 
-  const [user, setUserState] = useState(
-    () => {
-      try {
-        const savedUser =
-          localStorage.getItem(
-            USER_DATA
-          );
-
-        return savedUser
-          ? JSON.parse(savedUser)
-          : null;
-      } catch (error) {
-        console.error(
-          "Saved user load error:",
-          error
-        );
-
-        localStorage.removeItem(
+  const [
+    user,
+    setUserState,
+  ] = useState(() => {
+    try {
+      const savedUser =
+        localStorage.getItem(
           USER_DATA
         );
 
-        return null;
-      }
-    }
-  );
+      return savedUser
+        ? JSON.parse(savedUser)
+        : null;
+    } catch (error) {
+      console.error(
+        "Saved user load error:",
+        error
+      );
 
+      localStorage.removeItem(
+        USER_DATA
+      );
+
+      return null;
+    }
+  });
 
   /* -------------------------------------------------------
      Tokens
@@ -148,19 +140,19 @@ export function AuthProvider({
     () => getStoredRefreshToken()
   );
 
-
   /* -------------------------------------------------------
      UI State
   ------------------------------------------------------- */
 
-  const [loading, setLoading] =
-    useState(true);
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
 
   const [
     isLoginOpen,
     setIsLoginOpen,
   ] = useState(false);
-
 
   /* =======================================================
      User Storage
@@ -168,15 +160,18 @@ export function AuthProvider({
 
   const saveUser = useCallback(
     (nextUser) => {
+      const normalizedUser =
+        nextUser || null;
+
       setUserState(
-        nextUser || null
+        normalizedUser
       );
 
-      if (nextUser) {
+      if (normalizedUser) {
         localStorage.setItem(
           USER_DATA,
           JSON.stringify(
-            nextUser
+            normalizedUser
           )
         );
       } else {
@@ -187,7 +182,6 @@ export function AuthProvider({
     },
     []
   );
-
 
   /* =======================================================
      Token Storage
@@ -220,7 +214,6 @@ export function AuthProvider({
     },
     []
   );
-
 
   /* =======================================================
      Clear Authentication
@@ -255,7 +248,6 @@ export function AuthProvider({
       setRefreshToken("");
     }, []);
 
-
   /* =======================================================
      Update Current User
   ======================================================= */
@@ -270,7 +262,6 @@ export function AuthProvider({
       [saveUser]
     );
 
-
   /* =======================================================
      Login Drawer
   ======================================================= */
@@ -280,12 +271,10 @@ export function AuthProvider({
       setIsLoginOpen(true);
     }, []);
 
-
   const closeLogin =
     useCallback(() => {
       setIsLoginOpen(false);
     }, []);
-
 
   /* =======================================================
      Load Existing Session
@@ -348,7 +337,6 @@ export function AuthProvider({
     clearAuthentication,
   ]);
 
-
   /* =======================================================
      Login
   ======================================================= */
@@ -393,9 +381,7 @@ export function AuthProvider({
         try {
           loggedInUser =
             await fetchProfile();
-        } catch (
-          profileError
-        ) {
+        } catch (profileError) {
           console.error(
             "Profile fetch after login failed:",
             profileError
@@ -422,7 +408,6 @@ export function AuthProvider({
       closeLogin,
     ]
   );
-
 
   /* =======================================================
      Register
@@ -464,9 +449,7 @@ export function AuthProvider({
         try {
           registeredUser =
             await fetchProfile();
-        } catch (
-          profileError
-        ) {
+        } catch (profileError) {
           console.error(
             "Profile fetch after register failed:",
             profileError
@@ -493,7 +476,6 @@ export function AuthProvider({
       closeLogin,
     ]
   );
-
 
   /* =======================================================
      Logout
@@ -524,47 +506,48 @@ export function AuthProvider({
     ]
   );
 
-
   /* =======================================================
      Refresh User Profile
   ======================================================= */
 
   const refreshCurrentUser =
-    useCallback(async () => {
-      if (!accessToken) {
-        return null;
-      }
-
-      try {
-        const profile =
-          await fetchProfile();
-
-        saveUser(
-          profile
-        );
-
-        return profile;
-      } catch (error) {
-        console.error(
-          "Current user refresh error:",
-          error
-        );
-
-        if (
-          error?.status === 401 ||
-          error?.status === 403
-        ) {
-          clearAuthentication();
+    useCallback(
+      async () => {
+        if (!accessToken) {
+          return null;
         }
 
-        throw error;
-      }
-    }, [
-      accessToken,
-      saveUser,
-      clearAuthentication,
-    ]);
+        try {
+          const profile =
+            await fetchProfile();
 
+          saveUser(
+            profile
+          );
+
+          return profile;
+        } catch (error) {
+          console.error(
+            "Current user refresh error:",
+            error
+          );
+
+          if (
+            error?.status === 401 ||
+            error?.status === 403
+          ) {
+            clearAuthentication();
+          }
+
+          throw error;
+        }
+      },
+      [
+        accessToken,
+        saveUser,
+        clearAuthentication,
+      ]
+    );
 
   /* =======================================================
      Authentication Flags
@@ -576,33 +559,25 @@ export function AuthProvider({
       user
     );
 
+  const isStaff =
+    Boolean(
+      user?.is_staff ||
+      user?.isStaff
+    );
 
-  /*
-   * Django normally exposes is_staff / is_superuser.
-   *
-   * Extra fallbacks are included so this will also
-   * work if your profile serializer returns role/admin
-   * instead.
-   */
-  const isStaff = Boolean(
-    user?.is_staff ||
-    user?.isStaff
-  );
+  const isSuperuser =
+    Boolean(
+      user?.is_superuser ||
+      user?.isSuperuser
+    );
 
-
-  const isSuperuser = Boolean(
-    user?.is_superuser ||
-    user?.isSuperuser
-  );
-
-
-  const isAdmin = Boolean(
-    isStaff ||
-    isSuperuser ||
-    user?.is_admin ||
-    user?.role === "admin"
-  );
-
+  const isAdmin =
+    Boolean(
+      isStaff ||
+      isSuperuser ||
+      user?.is_admin ||
+      user?.role === "admin"
+    );
 
   /* =======================================================
      Context Value
@@ -667,7 +642,6 @@ export function AuthProvider({
     ]
   );
 
-
   return (
     <AuthContext.Provider
       value={value}
@@ -676,7 +650,6 @@ export function AuthProvider({
     </AuthContext.Provider>
   );
 }
-
 
 /* =========================================================
    useAuth Hook
@@ -696,6 +669,7 @@ export function useAuth() {
 
   return context;
 }
+
 
 
 export default AuthContext;

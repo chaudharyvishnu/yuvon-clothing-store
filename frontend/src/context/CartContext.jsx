@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -9,9 +10,17 @@ import {
 const CartContext = createContext(null);
 
 const CART_STORAGE_KEY = "yuvon_cart_items";
-const BACKEND_URL = "http://127.0.0.1:8000";
+
+const BACKEND_URL =
+  import.meta.env.VITE_BACKEND_URL ||
+  "http://127.0.0.1:8000";
+
 const FALLBACK_IMAGE =
   "https://placehold.co/500x650?text=No+Image";
+
+/* =========================================================
+   Product Helpers
+========================================================= */
 
 function getProductId(product) {
   return (
@@ -106,7 +115,9 @@ function getProductImage(product) {
   }
 
   return `${BACKEND_URL}${
-    image.startsWith("/") ? image : `/${image}`
+    image.startsWith("/")
+      ? image
+      : `/${image}`
   }`;
 }
 
@@ -127,6 +138,10 @@ function getProductName(product) {
   );
 }
 
+/* =========================================================
+   Stock / Quantity Helpers
+========================================================= */
+
 function getNormalizedStock(product) {
   const stockValue =
     product?.stock ??
@@ -144,7 +159,8 @@ function getNormalizedStock(product) {
     return null;
   }
 
-  const parsedStock = Number(stockValue);
+  const parsedStock =
+    Number(stockValue);
 
   if (!Number.isFinite(parsedStock)) {
     return null;
@@ -160,7 +176,8 @@ function getNormalizedQuantity(
   quantity,
   stock = null
 ) {
-  const parsedQuantity = Number(quantity);
+  const parsedQuantity =
+    Number(quantity);
 
   const safeQuantity =
     Number.isFinite(parsedQuantity)
@@ -184,6 +201,10 @@ function getNormalizedQuantity(
   );
 }
 
+/* =========================================================
+   Cart Item Key
+========================================================= */
+
 function createCartItemKey(product) {
   const productId =
     getProductId(product) ??
@@ -203,6 +224,10 @@ function createCartItemKey(product) {
 
   return `${productId}-${variantId}-${size}-${color}`;
 }
+
+/* =========================================================
+   Normalize Cart Item
+========================================================= */
 
 function normalizeCartItem(product) {
   const productId =
@@ -258,6 +283,19 @@ function normalizeCartItem(product) {
       color,
     });
 
+  const image =
+    getProductImage(product);
+
+  const brand =
+    getProductBrand(product);
+
+  const normalizedOldPrice =
+    rawOldPrice !== null &&
+    rawOldPrice !== undefined &&
+    rawOldPrice !== ""
+      ? Number(rawOldPrice)
+      : null;
+
   return {
     ...product,
 
@@ -279,20 +317,12 @@ function normalizeCartItem(product) {
     name:
       getProductName(product),
 
-    brand:
-      getProductBrand(product),
+    brand,
+    brand_name: brand,
 
-    brand_name:
-      getProductBrand(product),
-
-    image:
-      getProductImage(product),
-
-    main_image:
-      getProductImage(product),
-
-    main_image_url:
-      getProductImage(product),
+    image,
+    main_image: image,
+    main_image_url: image,
 
     size,
     selectedSize: size,
@@ -302,23 +332,17 @@ function normalizeCartItem(product) {
     selectedColor: color,
     selected_color: color,
 
-    price: Number(rawPrice || 0),
+    price:
+      Number(rawPrice || 0),
 
     oldPrice:
-      rawOldPrice !== null &&
-      rawOldPrice !== undefined &&
-      rawOldPrice !== ""
-        ? Number(rawOldPrice)
-        : null,
+      normalizedOldPrice,
 
     old_price:
-      rawOldPrice !== null &&
-      rawOldPrice !== undefined &&
-      rawOldPrice !== ""
-        ? Number(rawOldPrice)
-        : null,
+      normalizedOldPrice,
 
     quantity,
+
     stock,
     stock_quantity: stock,
 
@@ -331,6 +355,10 @@ function normalizeCartItem(product) {
       ),
   };
 }
+
+/* =========================================================
+   Local Storage
+========================================================= */
 
 function loadStoredCart() {
   try {
@@ -376,6 +404,10 @@ function loadStoredCart() {
   }
 }
 
+/* =========================================================
+   Cart Provider
+========================================================= */
+
 export const CartProvider = ({
   children,
 }) => {
@@ -389,11 +421,13 @@ export const CartProvider = ({
     setIsCartOpen,
   ] = useState(false);
 
+  /* =======================================================
+     Persist Cart
+  ======================================================= */
+
   useEffect(() => {
     try {
-      if (
-        cartItems.length === 0
-      ) {
+      if (cartItems.length === 0) {
         localStorage.removeItem(
           CART_STORAGE_KEY
         );
@@ -413,388 +447,467 @@ export const CartProvider = ({
     }
   }, [cartItems]);
 
-  const addToCart = (
-    product,
-    options = {}
-  ) => {
-    const productId =
-      getProductId(product);
+  /* =======================================================
+     Add To Cart
+  ======================================================= */
 
-    if (!productId) {
-      console.error(
-        "Product ID is required to add an item to cart."
+  const addToCart = useCallback(
+    (
+      product,
+      options = {}
+    ) => {
+      const productId =
+        getProductId(product);
+
+      if (!productId) {
+        console.error(
+          "Product ID is required to add an item to cart."
+        );
+
+        return {
+          success: false,
+          reason:
+            "missing-product-id",
+        };
+      }
+
+      const newItem =
+        normalizeCartItem({
+          ...product,
+          ...options,
+
+          productId,
+
+          quantity:
+            options?.quantity ??
+            product?.quantity ??
+            1,
+        });
+
+      if (
+        !newItem.isInStock ||
+        (
+          newItem.stock !== null &&
+          newItem.stock <= 0
+        )
+      ) {
+        console.warn(
+          "Out-of-stock product cannot be added to cart."
+        );
+
+        return {
+          success: false,
+          reason: "out-of-stock",
+        };
+      }
+
+      setCartItems(
+        (currentItems) => {
+          const existingItem =
+            currentItems.find(
+              (item) =>
+                item.itemKey ===
+                newItem.itemKey
+            );
+
+          if (!existingItem) {
+            return [
+              ...currentItems,
+              newItem,
+            ];
+          }
+
+          return currentItems.map(
+            (item) => {
+              if (
+                item.itemKey !==
+                newItem.itemKey
+              ) {
+                return item;
+              }
+
+              const mergedStock =
+                newItem.stock !== null
+                  ? newItem.stock
+                  : item.stock;
+
+              const requestedQuantity =
+                Number(
+                  item.quantity || 0
+                ) +
+                Number(
+                  newItem.quantity || 1
+                );
+
+              const mergedQuantity =
+                getNormalizedQuantity(
+                  requestedQuantity,
+                  mergedStock
+                );
+
+              return {
+                ...item,
+                ...newItem,
+
+                stock:
+                  mergedStock,
+
+                stock_quantity:
+                  mergedStock,
+
+                quantity:
+                  mergedQuantity,
+              };
+            }
+          );
+        }
       );
 
+      setIsCartOpen(true);
+
       return {
-        success: false,
-        reason: "missing-product-id",
+        success: true,
+        item: newItem,
       };
-    }
+    },
+    []
+  );
 
-    const newItem =
-      normalizeCartItem({
-        ...product,
-        ...options,
+  /* =======================================================
+     Remove Item
+  ======================================================= */
 
-        productId,
+  const removeFromCart =
+    useCallback(
+      (itemKey) => {
+        setCartItems(
+          (currentItems) =>
+            currentItems.filter(
+              (item) =>
+                item.itemKey !==
+                itemKey
+            )
+        );
+      },
+      []
+    );
 
-        quantity:
-          options?.quantity ??
-          product?.quantity ??
-          1,
-      });
+  /* =======================================================
+     Update Quantity
+  ======================================================= */
 
-    if (
-      !newItem.isInStock ||
+  const updateQuantity =
+    useCallback(
       (
-        newItem.stock !== null &&
-        newItem.stock <= 0
-      )
-    ) {
-      console.warn(
-        "Out-of-stock product cannot be added to cart."
-      );
+        itemKey,
+        requestedQuantity
+      ) => {
+        setCartItems(
+          (currentItems) =>
+            currentItems.map(
+              (item) => {
+                if (
+                  item.itemKey !==
+                  itemKey
+                ) {
+                  return item;
+                }
 
-      return {
-        success: false,
-        reason: "out-of-stock",
-      };
-    }
+                const quantity =
+                  getNormalizedQuantity(
+                    requestedQuantity,
+                    item.stock
+                  );
 
-    setCartItems(
-      (currentItems) => {
-        const existingItem =
-          currentItems.find(
+                if (quantity <= 0) {
+                  return item;
+                }
+
+                return {
+                  ...item,
+                  quantity,
+                };
+              }
+            )
+        );
+      },
+      []
+    );
+
+  /* =======================================================
+     Increase Quantity
+  ======================================================= */
+
+  const increaseQuantity =
+    useCallback(
+      (itemKey) => {
+        setCartItems(
+          (currentItems) =>
+            currentItems.map(
+              (item) => {
+                if (
+                  item.itemKey !==
+                  itemKey
+                ) {
+                  return item;
+                }
+
+                const quantity =
+                  getNormalizedQuantity(
+                    Number(
+                      item.quantity || 1
+                    ) + 1,
+                    item.stock
+                  );
+
+                if (
+                  quantity ===
+                  item.quantity
+                ) {
+                  return item;
+                }
+
+                return {
+                  ...item,
+                  quantity,
+                };
+              }
+            )
+        );
+      },
+      []
+    );
+
+  /* =======================================================
+     Decrease Quantity
+  ======================================================= */
+
+  const decreaseQuantity =
+    useCallback(
+      (itemKey) => {
+        setCartItems(
+          (currentItems) =>
+            currentItems.map(
+              (item) => {
+                if (
+                  item.itemKey !==
+                  itemKey
+                ) {
+                  return item;
+                }
+
+                return {
+                  ...item,
+
+                  quantity:
+                    Math.max(
+                      1,
+                      Number(
+                        item.quantity || 1
+                      ) - 1
+                    ),
+                };
+              }
+            )
+        );
+      },
+      []
+    );
+
+  /* =======================================================
+     Update Stock
+  ======================================================= */
+
+  const setItemStock =
+    useCallback(
+      (
+        itemKey,
+        stock
+      ) => {
+        setCartItems(
+          (currentItems) =>
+            currentItems.map(
+              (item) => {
+                if (
+                  item.itemKey !==
+                  itemKey
+                ) {
+                  return item;
+                }
+
+                const normalizedStock =
+                  getNormalizedStock({
+                    stock,
+                  });
+
+                const quantity =
+                  getNormalizedQuantity(
+                    item.quantity,
+                    normalizedStock
+                  );
+
+                return {
+                  ...item,
+
+                  stock:
+                    normalizedStock,
+
+                  stock_quantity:
+                    normalizedStock,
+
+                  quantity:
+                    quantity > 0
+                      ? quantity
+                      : item.quantity,
+
+                  isInStock:
+                    normalizedStock ===
+                      null ||
+                    normalizedStock > 0,
+                };
+              }
+            )
+        );
+      },
+      []
+    );
+
+  /* =======================================================
+     Find Cart Item
+  ======================================================= */
+
+  const getCartItem =
+    useCallback(
+      (itemKey) => {
+        return (
+          cartItems.find(
             (item) =>
               item.itemKey ===
-              newItem.itemKey
+              itemKey
+          ) || null
+        );
+      },
+      [cartItems]
+    );
+
+  const getCartItemByProduct =
+    useCallback(
+      (product) => {
+        const itemKey =
+          createCartItemKey(
+            product
           );
 
-        if (!existingItem) {
-          return [
-            ...currentItems,
-            newItem,
-          ];
-        }
-
-        return currentItems.map(
-          (item) => {
-            if (
-              item.itemKey !==
-              newItem.itemKey
-            ) {
-              return item;
-            }
-
-            const mergedStock =
-              newItem.stock !== null
-                ? newItem.stock
-                : item.stock;
-
-            const requestedQuantity =
-              Number(
-                item.quantity || 0
-              ) +
-              Number(
-                newItem.quantity || 1
-              );
-
-            const mergedQuantity =
-              getNormalizedQuantity(
-                requestedQuantity,
-                mergedStock
-              );
-
-            return {
-              ...item,
-              ...newItem,
-
-              stock: mergedStock,
-              stock_quantity:
-                mergedStock,
-
-              quantity:
-                mergedQuantity,
-            };
-          }
+        return (
+          cartItems.find(
+            (item) =>
+              item.itemKey ===
+              itemKey
+          ) || null
         );
-      }
+      },
+      [cartItems]
     );
 
-    setIsCartOpen(true);
-
-    return {
-      success: true,
-      item: newItem,
-    };
-  };
-
-  const removeFromCart = (
-    itemKey
-  ) => {
-    setCartItems(
-      (currentItems) =>
-        currentItems.filter(
-          (item) =>
-            item.itemKey !==
-            itemKey
-        )
+  const isInCart =
+    useCallback(
+      (product) => {
+        return Boolean(
+          getCartItemByProduct(
+            product
+          )
+        );
+      },
+      [getCartItemByProduct]
     );
-  };
 
-  const updateQuantity = (
-    itemKey,
-    requestedQuantity
-  ) => {
-    setCartItems(
-      (currentItems) =>
-        currentItems.map(
-          (item) => {
-            if (
-              item.itemKey !==
-              itemKey
-            ) {
-              return item;
-            }
+  /* =======================================================
+     Clear Cart
+  ======================================================= */
 
-            const quantity =
-              getNormalizedQuantity(
-                requestedQuantity,
-                item.stock
-              );
-
-            if (quantity <= 0) {
-              return item;
-            }
-
-            return {
-              ...item,
-              quantity,
-            };
-          }
-        )
-    );
-  };
-
-  const increaseQuantity = (
-    itemKey
-  ) => {
-    setCartItems(
-      (currentItems) =>
-        currentItems.map(
-          (item) => {
-            if (
-              item.itemKey !==
-              itemKey
-            ) {
-              return item;
-            }
-
-            const quantity =
-              getNormalizedQuantity(
-                Number(
-                  item.quantity || 1
-                ) + 1,
-                item.stock
-              );
-
-            if (
-              quantity ===
-              item.quantity
-            ) {
-              return item;
-            }
-
-            return {
-              ...item,
-              quantity,
-            };
-          }
-        )
-    );
-  };
-
-  const decreaseQuantity = (
-    itemKey
-  ) => {
-    setCartItems(
-      (currentItems) =>
-        currentItems.map(
-          (item) => {
-            if (
-              item.itemKey !==
-              itemKey
-            ) {
-              return item;
-            }
-
-            return {
-              ...item,
-
-              quantity: Math.max(
-                1,
-                Number(
-                  item.quantity || 1
-                ) - 1
-              ),
-            };
-          }
-        )
-    );
-  };
-
-  const setItemStock = (
-    itemKey,
-    stock
-  ) => {
-    setCartItems(
-      (currentItems) =>
-        currentItems.map(
-          (item) => {
-            if (
-              item.itemKey !==
-              itemKey
-            ) {
-              return item;
-            }
-
-            const normalizedStock =
-              getNormalizedStock({
-                stock,
-              });
-
-            const quantity =
-              getNormalizedQuantity(
-                item.quantity,
-                normalizedStock
-              );
-
-            return {
-              ...item,
-
-              stock:
-                normalizedStock,
-
-              stock_quantity:
-                normalizedStock,
-
-              quantity:
-                quantity > 0
-                  ? quantity
-                  : item.quantity,
-
-              isInStock:
-                normalizedStock ===
-                  null ||
-                normalizedStock > 0,
-            };
-          }
-        )
-    );
-  };
-
-  const getCartItem = (
-    itemKey
-  ) => {
-    return (
-      cartItems.find(
-        (item) =>
-          item.itemKey ===
-          itemKey
-      ) || null
-    );
-  };
-
-  const getCartItemByProduct = (
-    product
-  ) => {
-    const itemKey =
-      createCartItemKey(product);
-
-    return (
-      cartItems.find(
-        (item) =>
-          item.itemKey ===
-          itemKey
-      ) || null
-    );
-  };
-
-  const isInCart = (
-    product
-  ) => {
-    return Boolean(
-      getCartItemByProduct(
-        product
-      )
-    );
-  };
-
-  const clearCart = () => {
-    setCartItems([]);
-  };
+  const clearCart =
+    useCallback(() => {
+      setCartItems([]);
+    }, []);
 
   const clearCartAndClose =
-    () => {
+    useCallback(() => {
       setCartItems([]);
       setIsCartOpen(false);
-    };
+    }, []);
 
-  const openCart = () => {
-    setIsCartOpen(true);
-  };
+  /* =======================================================
+     Cart Drawer
+  ======================================================= */
 
-  const closeCart = () => {
-    setIsCartOpen(false);
-  };
+  const openCart =
+    useCallback(() => {
+      setIsCartOpen(true);
+    }, []);
 
-  const toggleCart = () => {
-    setIsCartOpen(
-      (currentState) =>
-        !currentState
-    );
-  };
+  const closeCart =
+    useCallback(() => {
+      setIsCartOpen(false);
+    }, []);
 
-  const subtotal = useMemo(
-    () =>
-      cartItems.reduce(
-        (sum, item) => {
-          return (
-            sum +
-            Number(
-              item.price || 0
-            ) *
+  const toggleCart =
+    useCallback(() => {
+      setIsCartOpen(
+        (currentState) =>
+          !currentState
+      );
+    }, []);
+
+  /* =======================================================
+     Cart Totals
+  ======================================================= */
+
+  const subtotal =
+    useMemo(
+      () =>
+        cartItems.reduce(
+          (sum, item) => {
+            return (
+              sum +
+              Number(
+                item.price || 0
+              ) *
               Number(
                 item.quantity || 0
               )
-          );
-        },
-        0
-      ),
-    [cartItems]
-  );
+            );
+          },
+          0
+        ),
+      [cartItems]
+    );
 
-  const totalItems = useMemo(
-    () =>
-      cartItems.reduce(
-        (sum, item) => {
-          return (
-            sum +
-            Number(
-              item.quantity || 0
-            )
-          );
-        },
-        0
-      ),
-    [cartItems]
-  );
+  const totalItems =
+    useMemo(
+      () =>
+        cartItems.reduce(
+          (sum, item) => {
+            return (
+              sum +
+              Number(
+                item.quantity || 0
+              )
+            );
+          },
+          0
+        ),
+      [cartItems]
+    );
 
   const uniqueItems =
     cartItems.length;
 
   const hasItems =
     cartItems.length > 0;
+
+  /* =======================================================
+     Context Value
+  ======================================================= */
 
   const value = useMemo(
     () => ({
@@ -831,9 +944,29 @@ export const CartProvider = ({
     }),
     [
       cartItems,
+
+      addToCart,
+      removeFromCart,
+      updateQuantity,
+      increaseQuantity,
+      decreaseQuantity,
+      setItemStock,
+
+      getCartItem,
+      getCartItemByProduct,
+      isInCart,
+
+      clearCart,
+      clearCartAndClose,
+
       isCartOpen,
+      openCart,
+      closeCart,
+      toggleCart,
+
       subtotal,
       totalItems,
+
       uniqueItems,
       hasItems,
     ]
@@ -848,9 +981,15 @@ export const CartProvider = ({
   );
 };
 
+/* =========================================================
+   useCart Hook
+========================================================= */
+
 export const useCart = () => {
   const context =
-    useContext(CartContext);
+    useContext(
+      CartContext
+    );
 
   if (!context) {
     throw new Error(

@@ -19,6 +19,10 @@ import { useAuth } from "./AuthContext";
 const WishlistContext =
   createContext(null);
 
+/* =========================================================
+   Helpers
+========================================================= */
+
 function getWishlistProductId(item) {
   if (!item) {
     return null;
@@ -28,7 +32,10 @@ function getWishlistProductId(item) {
     item.product &&
     typeof item.product === "object"
   ) {
-    return item.product.id ?? null;
+    return (
+      item.product.id ??
+      null
+    );
   }
 
   if (
@@ -47,15 +54,19 @@ function getWishlistProductId(item) {
 
   /*
    * Local/product-shaped objects ke liye fallback.
-   * Backend wishlist item me `id` wishlist row ID hota hai,
-   * isliye nested product hone par ye fallback use nahi hoga.
+   *
+   * Backend wishlist item me `id`
+   * wishlist row ID ho sakta hai.
    */
   if (
     item.name ||
     item.slug ||
     item.price !== undefined
   ) {
-    return item.id ?? null;
+    return (
+      item.id ??
+      null
+    );
   }
 
   return null;
@@ -69,19 +80,25 @@ function normalizeWishlistResponse(
   }
 
   if (
-    Array.isArray(response?.results)
+    Array.isArray(
+      response?.results
+    )
   ) {
     return response.results;
   }
 
   if (
-    Array.isArray(response?.items)
+    Array.isArray(
+      response?.items
+    )
   ) {
     return response.items;
   }
 
   if (
-    Array.isArray(response?.wishlist)
+    Array.isArray(
+      response?.wishlist
+    )
   ) {
     return response.wishlist;
   }
@@ -95,7 +112,9 @@ function getErrorMessage(error) {
       error.data.detail
     )
       ? error.data.detail.join(" ")
-      : String(error.data.detail);
+      : String(
+          error.data.detail
+        );
   }
 
   if (error?.data?.message) {
@@ -109,6 +128,10 @@ function getErrorMessage(error) {
     "Wishlist update nahi ho paayi."
   );
 }
+
+/* =========================================================
+   Wishlist Provider
+========================================================= */
 
 export function WishlistProvider({
   children,
@@ -124,11 +147,15 @@ export function WishlistProvider({
     setWishlistItems,
   ] = useState([]);
 
-  const [loading, setLoading] =
-    useState(false);
+  const [
+    loading,
+    setLoading,
+  ] = useState(false);
 
-  const [error, setError] =
-    useState("");
+  const [
+    error,
+    setError,
+  ] = useState("");
 
   const [
     updatingProductIds,
@@ -145,63 +172,100 @@ export function WishlistProvider({
     setClearingWishlist,
   ] = useState(false);
 
-  // =====================================
-  // Load Wishlist
-  // =====================================
+  /* =======================================================
+     Load Wishlist
+  ======================================================= */
 
   const loadWishlist =
-    useCallback(async () => {
-      if (
-        authLoading ||
-        !isAuthenticated
-      ) {
-        setWishlistItems([]);
-        setError("");
-        setLoading(false);
-        return [];
-      }
+    useCallback(
+      async () => {
+        if (
+          authLoading ||
+          !isAuthenticated
+        ) {
+          setWishlistItems([]);
+          setError("");
+          setLoading(false);
 
-      try {
-        setLoading(true);
-        setError("");
+          return [];
+        }
 
-        const response =
-          await fetchWishlist();
+        try {
+          setLoading(true);
+          setError("");
 
-        const items =
-          normalizeWishlistResponse(
-            response
+          const response =
+            await fetchWishlist();
+
+          const items =
+            normalizeWishlistResponse(
+              response
+            );
+
+          setWishlistItems(
+            items
           );
 
-        setWishlistItems(items);
+          return items;
+        } catch (loadError) {
+          console.error(
+            "Wishlist load error:",
+            loadError
+          );
 
-        return items;
-      } catch (loadError) {
-        console.error(
-          "Wishlist load error:",
-          loadError
-        );
+          setError(
+            getErrorMessage(
+              loadError
+            )
+          );
 
-        setError(
-          getErrorMessage(loadError)
-        );
+          return [];
+        } finally {
+          setLoading(false);
+        }
+      },
+      [
+        authLoading,
+        isAuthenticated,
+      ]
+    );
 
-        return [];
-      } finally {
-        setLoading(false);
-      }
-    }, [
-      authLoading,
-      isAuthenticated,
-    ]);
+  /* =======================================================
+     Auto Load
+  ======================================================= */
 
   useEffect(() => {
-    loadWishlist();
+    let cancelled = false;
+
+    const run =
+      async () => {
+        if (cancelled) {
+          return;
+        }
+
+        await loadWishlist();
+      };
+
+    const timeoutId =
+      window.setTimeout(
+        () => {
+          run();
+        },
+        0
+      );
+
+    return () => {
+      cancelled = true;
+
+      window.clearTimeout(
+        timeoutId
+      );
+    };
   }, [loadWishlist]);
 
-  // =====================================
-  // Toggle Wishlist
-  // =====================================
+  /* =======================================================
+     Toggle Wishlist
+  ======================================================= */
 
   const toggleWishlist =
     useCallback(
@@ -256,9 +320,8 @@ export function WishlistProvider({
             );
 
           /*
-           * Backend response shape alag ho sakti hai,
-           * isliye successful toggle ke baad authoritative
-           * wishlist dobara backend se load kar rahe hain.
+           * Backend response authoritative hai,
+           * isliye toggle ke baad reload.
            */
           await loadWishlist();
 
@@ -277,7 +340,9 @@ export function WishlistProvider({
               toggleError
             );
 
-          setError(message);
+          setError(
+            message
+          );
 
           throw toggleError;
         } finally {
@@ -299,13 +364,15 @@ export function WishlistProvider({
       ]
     );
 
-  // =====================================
-  // Remove Wishlist Item
-  // =====================================
+  /* =======================================================
+     Remove Wishlist Item
+  ======================================================= */
 
   const removeFromWishlist =
     useCallback(
-      async (wishlistItemId) => {
+      async (
+        wishlistItemId
+      ) => {
         if (!isAuthenticated) {
           openLogin?.();
 
@@ -318,7 +385,8 @@ export function WishlistProvider({
         if (
           wishlistItemId ===
             undefined ||
-          wishlistItemId === null
+          wishlistItemId ===
+            null
         ) {
           throw new Error(
             "Wishlist item ID is required."
@@ -326,7 +394,9 @@ export function WishlistProvider({
         }
 
         const normalizedItemId =
-          String(wishlistItemId);
+          String(
+            wishlistItemId
+          );
 
         if (
           removingItemIds.includes(
@@ -352,12 +422,13 @@ export function WishlistProvider({
 
           setError("");
 
-          // Optimistic UI update
           setWishlistItems(
             (current) =>
               current.filter(
                 (item) =>
-                  String(item.id) !==
+                  String(
+                    item.id
+                  ) !==
                   normalizedItemId
               )
           );
@@ -377,7 +448,6 @@ export function WishlistProvider({
             removeError
           );
 
-          // API fail hone par purani list restore
           setWishlistItems(
             previousItems
           );
@@ -387,7 +457,9 @@ export function WishlistProvider({
               removeError
             );
 
-          setError(message);
+          setError(
+            message
+          );
 
           throw removeError;
         } finally {
@@ -409,85 +481,96 @@ export function WishlistProvider({
       ]
     );
 
-  // =====================================
-  // Clear Entire Wishlist
-  // =====================================
+  /* =======================================================
+     Clear Wishlist
+  ======================================================= */
 
   const clearWishlist =
-    useCallback(async () => {
-      if (!isAuthenticated) {
-        openLogin?.();
+    useCallback(
+      async () => {
+        if (!isAuthenticated) {
+          openLogin?.();
 
-        return {
-          success: false,
-          requiresLogin: true,
-        };
-      }
+          return {
+            success: false,
+            requiresLogin: true,
+          };
+        }
 
-      if (
-        clearingWishlist ||
-        wishlistItems.length === 0
-      ) {
-        return {
-          success: false,
-          pending:
-            clearingWishlist,
-        };
-      }
+        if (
+          clearingWishlist ||
+          wishlistItems.length === 0
+        ) {
+          return {
+            success: false,
+            pending:
+              clearingWishlist,
+          };
+        }
 
-      const previousItems =
-        wishlistItems;
+        const previousItems =
+          wishlistItems;
 
-      try {
-        setClearingWishlist(true);
-        setError("");
+        try {
+          setClearingWishlist(
+            true
+          );
 
-        setWishlistItems([]);
+          setError("");
 
-        const response =
-          await clearWishlistApi();
+          setWishlistItems([]);
 
-        return {
-          success: true,
-          ...response,
-        };
-      } catch (clearError) {
-        console.error(
-          "Wishlist clear error:",
-          clearError
-        );
+          const response =
+            await clearWishlistApi();
 
-        setWishlistItems(
-          previousItems
-        );
-
-        const message =
-          getErrorMessage(
+          return {
+            success: true,
+            ...response,
+          };
+        } catch (clearError) {
+          console.error(
+            "Wishlist clear error:",
             clearError
           );
 
-        setError(message);
+          setWishlistItems(
+            previousItems
+          );
 
-        throw clearError;
-      } finally {
-        setClearingWishlist(false);
-      }
-    }, [
-      clearingWishlist,
-      isAuthenticated,
-      openLogin,
-      wishlistItems,
-    ]);
+          const message =
+            getErrorMessage(
+              clearError
+            );
 
-  // =====================================
-  // Wishlist Helpers
-  // =====================================
+          setError(
+            message
+          );
+
+          throw clearError;
+        } finally {
+          setClearingWishlist(
+            false
+          );
+        }
+      },
+      [
+        clearingWishlist,
+        isAuthenticated,
+        openLogin,
+        wishlistItems,
+      ]
+    );
+
+  /* =======================================================
+     Helpers
+  ======================================================= */
 
   const isWishlisted =
     useCallback(
       (productId) => {
         if (
-          productId === undefined ||
+          productId ===
+            undefined ||
           productId === null
         ) {
           return false;
@@ -500,7 +583,9 @@ export function WishlistProvider({
                 item
               )
             ) ===
-            String(productId)
+            String(
+              productId
+            )
         );
       },
       [wishlistItems]
@@ -510,7 +595,9 @@ export function WishlistProvider({
     useCallback(
       (productId) =>
         updatingProductIds.includes(
-          String(productId)
+          String(
+            productId
+          )
         ),
       [updatingProductIds]
     );
@@ -526,55 +613,65 @@ export function WishlistProvider({
       [removingItemIds]
     );
 
-  const wishlistCount =
-    wishlistItems.length;
-
   const clearError =
     useCallback(() => {
       setError("");
     }, []);
 
-  const value = useMemo(
-    () => ({
-      wishlistItems,
-      wishlistCount,
+  const wishlistCount =
+    wishlistItems.length;
 
-      loading,
-      error,
+  /* =======================================================
+     Context Value
+  ======================================================= */
 
-      updatingProductIds,
-      removingItemIds,
-      clearingWishlist,
+  const value =
+    useMemo(
+      () => ({
+        wishlistItems,
+        wishlistCount,
 
-      loadWishlist,
-      toggleWishlist,
-      removeFromWishlist,
-      clearWishlist,
+        loading,
+        error,
 
-      isWishlisted,
-      isWishlistUpdating,
-      isWishlistItemRemoving,
+        updatingProductIds,
+        removingItemIds,
+        clearingWishlist,
 
-      clearError,
-    }),
-    [
-      wishlistItems,
-      wishlistCount,
-      loading,
-      error,
-      updatingProductIds,
-      removingItemIds,
-      clearingWishlist,
-      loadWishlist,
-      toggleWishlist,
-      removeFromWishlist,
-      clearWishlist,
-      isWishlisted,
-      isWishlistUpdating,
-      isWishlistItemRemoving,
-      clearError,
-    ]
-  );
+        loadWishlist,
+        toggleWishlist,
+        removeFromWishlist,
+        clearWishlist,
+
+        isWishlisted,
+        isWishlistUpdating,
+        isWishlistItemRemoving,
+
+        clearError,
+      }),
+      [
+        wishlistItems,
+        wishlistCount,
+
+        loading,
+        error,
+
+        updatingProductIds,
+        removingItemIds,
+        clearingWishlist,
+
+        loadWishlist,
+        toggleWishlist,
+        removeFromWishlist,
+        clearWishlist,
+
+        isWishlisted,
+        isWishlistUpdating,
+        isWishlistItemRemoving,
+
+        clearError,
+      ]
+    );
 
   return (
     <WishlistContext.Provider
@@ -584,6 +681,10 @@ export function WishlistProvider({
     </WishlistContext.Provider>
   );
 }
+
+/* =========================================================
+   useWishlist
+========================================================= */
 
 export function useWishlist() {
   const context =
