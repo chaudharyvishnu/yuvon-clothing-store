@@ -28,10 +28,7 @@ load_dotenv(
 # Environment Helpers
 # =========================================================
 
-def env_bool(
-    name,
-    default=False,
-):
+def env_bool(name, default=False):
     """
     Convert common environment values to bool.
     """
@@ -49,10 +46,7 @@ def env_bool(
     }
 
 
-def env_list(
-    name,
-    default="",
-):
+def env_list(name, default=""):
     """
     Convert comma-separated env variable into list.
     """
@@ -67,10 +61,7 @@ def env_list(
     ]
 
 
-def env_int(
-    name,
-    default,
-):
+def env_int(name, default):
     try:
         return int(
             os.getenv(
@@ -99,8 +90,6 @@ SECRET_KEY = os.getenv(
     "",
 ).strip()
 
-
-# Local development fallback only.
 if not SECRET_KEY:
     if DEBUG:
         SECRET_KEY = (
@@ -114,11 +103,13 @@ if not SECRET_KEY:
 
 ALLOWED_HOSTS = env_list(
     "ALLOWED_HOSTS",
-    "127.0.0.1,localhost"
+    (
+        "127.0.0.1,"
+        "localhost"
+    )
     if DEBUG
     else "",
 )
-
 
 if not DEBUG and not ALLOWED_HOSTS:
     raise ImproperlyConfigured(
@@ -126,9 +117,15 @@ if not DEBUG and not ALLOWED_HOSTS:
     )
 
 
+# =========================================================
+# CSRF Trusted Origins
+# =========================================================
+
 CSRF_TRUSTED_ORIGINS = env_list(
     "CSRF_TRUSTED_ORIGINS",
     (
+        "http://localhost:3000,"
+        "http://127.0.0.1:3000,"
         "http://localhost:5173,"
         "http://127.0.0.1:5173"
     )
@@ -149,8 +146,8 @@ SECURE_REFERRER_POLICY = (
     "strict-origin-when-cross-origin"
 )
 
-
 if not DEBUG:
+
     SECURE_SSL_REDIRECT = env_bool(
         "SECURE_SSL_REDIRECT",
         default=True,
@@ -179,7 +176,6 @@ if not DEBUG:
         default=True,
     )
 
-    # Render / Railway / Nginx / reverse proxy
     SECURE_PROXY_SSL_HEADER = (
         "HTTP_X_FORWARDED_PROTO",
         "https",
@@ -191,6 +187,7 @@ if not DEBUG:
 # =========================================================
 
 INSTALLED_APPS = [
+
     # Django
     "django.contrib.admin",
     "django.contrib.auth",
@@ -242,12 +239,10 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
 ]
 
-
 if USE_WHITENOISE:
     MIDDLEWARE.append(
         "whitenoise.middleware.WhiteNoiseMiddleware"
     )
-
 
 MIDDLEWARE += [
     "corsheaders.middleware.CorsMiddleware",
@@ -272,10 +267,13 @@ TEMPLATES = [
         "BACKEND": (
             "django.template.backends.django.DjangoTemplates"
         ),
+
         "DIRS": [
             BASE_DIR / "templates",
         ],
+
         "APP_DIRS": True,
+
         "OPTIONS": {
             "context_processors": [
                 (
@@ -315,8 +313,10 @@ if DATABASE_ENGINE in {
     "postgres",
     "postgresql",
 }:
+
     DATABASES = {
         "default": {
+
             "ENGINE":
                 "django.db.backends.postgresql",
 
@@ -367,8 +367,10 @@ if DATABASE_ENGINE in {
     }
 
 else:
+
     DATABASES = {
         "default": {
+
             "ENGINE":
                 "django.db.backends.sqlite3",
 
@@ -379,7 +381,7 @@ else:
 
 
 # Prevent accidental SQLite production deployment
-# unless explicitly allowed.
+
 if (
     not DEBUG
     and DATABASE_ENGINE == "sqlite"
@@ -388,6 +390,7 @@ if (
         default=False,
     )
 ):
+
     raise ImproperlyConfigured(
         "SQLite is disabled for production. "
         "Configure PostgreSQL or set "
@@ -406,18 +409,21 @@ AUTH_PASSWORD_VALIDATORS = [
             "UserAttributeSimilarityValidator"
         ),
     },
+
     {
         "NAME": (
             "django.contrib.auth.password_validation."
             "MinimumLengthValidator"
         ),
     },
+
     {
         "NAME": (
             "django.contrib.auth.password_validation."
             "CommonPasswordValidator"
         ),
     },
+
     {
         "NAME": (
             "django.contrib.auth.password_validation."
@@ -452,13 +458,16 @@ STATIC_ROOT = (
 
 
 if USE_WHITENOISE:
+
     STORAGES = {
+
         "default": {
             "BACKEND": (
                 "django.core.files.storage."
                 "FileSystemStorage"
             ),
         },
+
         "staticfiles": {
             "BACKEND": (
                 "whitenoise.storage."
@@ -479,14 +488,6 @@ MEDIA_ROOT = (
 )
 
 
-# IMPORTANT:
-# Local MEDIA_ROOT is fine for development.
-#
-# On Render/Railway/etc. local media may not be persistent.
-# Production product/profile images should eventually use
-# Cloudinary, AWS S3 or another object-storage provider.
-
-
 # =========================================================
 # CORS
 # =========================================================
@@ -494,6 +495,8 @@ MEDIA_ROOT = (
 CORS_ALLOWED_ORIGINS = env_list(
     "CORS_ALLOWED_ORIGINS",
     (
+        "http://localhost:3000,"
+        "http://127.0.0.1:3000,"
         "http://localhost:5173,"
         "http://127.0.0.1:5173"
     )
@@ -501,9 +504,7 @@ CORS_ALLOWED_ORIGINS = env_list(
     else "",
 )
 
-
 CORS_ALLOW_CREDENTIALS = True
-
 
 CORS_ALLOW_HEADERS = [
     "accept",
@@ -523,6 +524,7 @@ CORS_ALLOW_HEADERS = [
 # =========================================================
 
 REST_FRAMEWORK = {
+
     "DEFAULT_AUTHENTICATION_CLASSES": (
         (
             "rest_framework_simplejwt."
@@ -567,6 +569,7 @@ REST_FRAMEWORK = {
 # =========================================================
 
 SIMPLE_JWT = {
+
     "ACCESS_TOKEN_LIFETIME":
         timedelta(
             minutes=env_int(
@@ -583,19 +586,15 @@ SIMPLE_JWT = {
             )
         ),
 
-    "ROTATE_REFRESH_TOKENS":
-        True,
+    "ROTATE_REFRESH_TOKENS": True,
 
-    "BLACKLIST_AFTER_ROTATION":
-        True,
+    "BLACKLIST_AFTER_ROTATION": True,
 
-    "UPDATE_LAST_LOGIN":
-        True,
+    "UPDATE_LAST_LOGIN": True,
 
-    "AUTH_HEADER_TYPES":
-        (
-            "Bearer",
-        ),
+    "AUTH_HEADER_TYPES": (
+        "Bearer",
+    ),
 }
 
 
@@ -618,7 +617,7 @@ DEFAULT_AUTO_FIELD = (
 
 FRONTEND_URL = os.getenv(
     "FRONTEND_URL",
-    "http://localhost:5173",
+    "http://localhost:3000",
 ).strip().rstrip("/")
 
 
@@ -661,11 +660,11 @@ EMAIL_USE_SSL = env_bool(
 )
 
 
-# TLS and SSL should not both be enabled.
 if (
     EMAIL_USE_TLS
     and EMAIL_USE_SSL
 ):
+
     raise ImproperlyConfigured(
         "EMAIL_USE_TLS and EMAIL_USE_SSL "
         "cannot both be True."
@@ -739,20 +738,18 @@ ORDER_NOTIFICATION_EMAIL = (
 # Cache
 # =========================================================
 
-# Safe default.
-# Good enough for local development and one web instance.
-#
-# Later, if multiple production instances are used,
-# switch this to Redis-backed Django cache.
-
 CACHES = {
+
     "default": {
+
         "BACKEND": (
             "django.core.cache.backends.locmem."
             "LocMemCache"
         ),
+
         "LOCATION":
             "yuvon-dashboard-cache",
+
         "TIMEOUT":
             env_int(
                 "CACHE_TIMEOUT",
@@ -791,6 +788,7 @@ REDIS_PASSWORD = os.getenv(
 
 
 if REDIS_PASSWORD:
+
     DEFAULT_REDIS_URL = (
         f"redis://:{REDIS_PASSWORD}"
         f"@{REDIS_HOST}:"
@@ -799,6 +797,7 @@ if REDIS_PASSWORD:
     )
 
 else:
+
     DEFAULT_REDIS_URL = (
         f"redis://"
         f"{REDIS_HOST}:"
@@ -833,19 +832,24 @@ CELERY_ACCEPT_CONTENT = [
     "json",
 ]
 
+
 CELERY_TASK_SERIALIZER = (
     "json"
 )
+
 
 CELERY_RESULT_SERIALIZER = (
     "json"
 )
 
+
 CELERY_TIMEZONE = (
     TIME_ZONE
 )
 
+
 CELERY_ENABLE_UTC = True
+
 
 CELERY_TASK_TRACK_STARTED = True
 
@@ -882,7 +886,9 @@ CELERY_TASK_ACKS_LATE = env_bool(
 
 CELERY_TASK_REJECT_ON_WORKER_LOST = True
 
+
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+
 
 CELERY_BROKER_CONNECTION_RETRY = True
 
@@ -945,13 +951,15 @@ LOG_LEVEL = os.getenv(
 
 
 LOGGING = {
+
     "version": 1,
 
-    "disable_existing_loggers":
-        False,
+    "disable_existing_loggers": False,
 
     "formatters": {
+
         "verbose": {
+
             "format": (
                 "{levelname} "
                 "{asctime} "
@@ -959,12 +967,15 @@ LOGGING = {
                 "{module} "
                 "{message}"
             ),
+
             "style": "{",
         },
     },
 
     "handlers": {
+
         "console": {
+
             "class":
                 "logging.StreamHandler",
 
@@ -974,6 +985,7 @@ LOGGING = {
     },
 
     "root": {
+
         "handlers": [
             "console",
         ],
@@ -983,7 +995,9 @@ LOGGING = {
     },
 
     "loggers": {
+
         "django": {
+
             "handlers": [
                 "console",
             ],
@@ -996,6 +1010,7 @@ LOGGING = {
         },
 
         "django.request": {
+
             "handlers": [
                 "console",
             ],
@@ -1023,6 +1038,7 @@ ENABLE_FILE_LOGGING = env_bool(
 
 
 if ENABLE_FILE_LOGGING:
+
     LOG_DIR = (
         BASE_DIR / "logs"
     )
@@ -1037,6 +1053,7 @@ if ENABLE_FILE_LOGGING:
     ][
         "file"
     ] = {
+
         "class": (
             "logging.handlers."
             "RotatingFileHandler"
@@ -1072,21 +1089,27 @@ if ENABLE_FILE_LOGGING:
 # =========================================================
 
 if not DEBUG:
+
     if not CORS_ALLOWED_ORIGINS:
+
         raise ImproperlyConfigured(
             "CORS_ALLOWED_ORIGINS must be configured "
             "for production."
         )
 
+
     if not CSRF_TRUSTED_ORIGINS:
+
         raise ImproperlyConfigured(
             "CSRF_TRUSTED_ORIGINS must be configured "
             "for production."
         )
 
+
     if SECRET_KEY.startswith(
         "django-insecure"
     ):
+
         raise ImproperlyConfigured(
             "A secure DJANGO_SECRET_KEY is required "
             "for production."
@@ -1098,6 +1121,7 @@ if not DEBUG:
 # =========================================================
 
 if DEBUG:
+
     print(
         "\n"
         + "=" * 70
@@ -1168,6 +1192,16 @@ if DEBUG:
     print(
         "WHITENOISE:",
         USE_WHITENOISE,
+    )
+
+    print(
+        "FRONTEND URL:",
+        FRONTEND_URL,
+    )
+
+    print(
+        "CORS ALLOWED ORIGINS:",
+        CORS_ALLOWED_ORIGINS,
     )
 
     print(

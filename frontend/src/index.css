@@ -8,8 +8,67 @@ html {
   scroll-behavior: smooth;
 }
 
+body {
+  margin: 0;
+  min-width: 320px;
+  background: #ffffff;
+}
+
 /* ======================================
-   Navbar Top Marquee
+   Navbar Top Announcement Marquee
+====================================== */
+
+.announcement-bar {
+  position: relative;
+  z-index: 60;
+  width: 100%;
+  overflow: hidden;
+  background: #000000;
+  color: #ffffff;
+}
+
+.announcement-track {
+  display: flex;
+  width: max-content;
+  animation: announcementScroll 24s linear infinite;
+  will-change: transform;
+}
+
+.announcement-group {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-around;
+  min-width: 100vw;
+  padding: 7px 0;
+}
+
+.announcement-group span {
+  flex-shrink: 0;
+  margin: 0 32px;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25rem;
+}
+
+@keyframes announcementScroll {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.announcement-bar:hover .announcement-track {
+  animation-play-state: paused;
+}
+
+/* ======================================
+   Legacy Navbar Marquee
+   Keep for any older component usage
 ====================================== */
 
 @keyframes marquee {
@@ -26,6 +85,7 @@ html {
   display: inline-block;
   white-space: nowrap;
   animation: marquee 25s linear infinite;
+  will-change: transform;
 }
 
 .animate-marquee:hover {
@@ -50,10 +110,52 @@ html {
   display: flex;
   width: max-content;
   animation: saleMarquee 20s linear infinite;
+  will-change: transform;
 }
 
 .marquee:hover {
   animation-play-state: paused;
+}
+
+/* ======================================
+   Responsive Announcement Speed
+====================================== */
+
+@media (max-width: 1024px) {
+  .announcement-track {
+    animation-duration: 20s;
+  }
+
+  .announcement-group span {
+    margin: 0 24px;
+  }
+}
+
+@media (max-width: 640px) {
+  .announcement-track {
+    animation-duration: 16s;
+  }
+
+  .announcement-group span {
+    margin: 0 20px;
+    font-size: 11px;
+  }
+}
+
+/* ======================================
+   Reduced Motion Accessibility
+====================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .announcement-track,
+  .animate-marquee,
+  .marquee {
+    animation: none;
+  }
 }
 
 /* ======================================
@@ -70,12 +172,20 @@ html {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #2563eb, #1d4ed8);
+  background: linear-gradient(
+    180deg,
+    #2563eb,
+    #1d4ed8
+  );
   border-radius: 50px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #1d4ed8, #1e40af);
+  background: linear-gradient(
+    180deg,
+    #1d4ed8,
+    #1e40af
+  );
 }
 
 /* Firefox */
@@ -91,5 +201,5 @@ html {
 
 ::selection {
   background: #2563eb;
-  color: white;
+  color: #ffffff;
 }

@@ -20,7 +20,6 @@ import {
   fetchSubCategories,
 } from "../../services/api";
 
-
 /* =========================================================
    Helpers
 ========================================================= */
@@ -50,7 +49,6 @@ function getUserDisplayName(user) {
     "Account"
   );
 }
-
 
 /* =========================================================
    Navbar
@@ -85,7 +83,6 @@ function Navbar() {
     wishlistItems,
     loading: wishlistLoading,
   } = useWishlist();
-
 
   /* =======================================================
      State
@@ -131,7 +128,6 @@ function Navbar() {
     setAccountMenuOpen,
   ] = useState(false);
 
-
   /* =======================================================
      Counts
   ======================================================= */
@@ -152,7 +148,6 @@ function Navbar() {
       ? wishlistItems.length
       : 0;
 
-
   /* =======================================================
      User Display
   ======================================================= */
@@ -167,7 +162,6 @@ function Navbar() {
       .trim()
       .charAt(0)
       .toUpperCase() || "U";
-
 
   /* =======================================================
      Load Navigation
@@ -255,7 +249,6 @@ function Navbar() {
     loadNavigationData();
   }, []);
 
-
   /* =======================================================
      Outside Account Menu Click
   ======================================================= */
@@ -288,7 +281,6 @@ function Navbar() {
       );
     };
   }, []);
-
 
   /* =======================================================
      Escape
@@ -327,7 +319,6 @@ function Navbar() {
       );
     };
   }, []);
-
 
   /* =======================================================
      Navigation Data
@@ -416,7 +407,6 @@ function Navbar() {
       subCategories,
     ]);
 
-
   /* =======================================================
      Search
   ======================================================= */
@@ -448,7 +438,6 @@ function Navbar() {
     );
   };
 
-
   /* =======================================================
      Department Navigation
   ======================================================= */
@@ -467,7 +456,6 @@ function Navbar() {
     );
   };
 
-
   const handleCategoryClick = (
     categorySlug
   ) => {
@@ -482,7 +470,6 @@ function Navbar() {
     );
   };
 
-
   const handleSubCategoryClick = (
     subCategorySlug
   ) => {
@@ -496,7 +483,6 @@ function Navbar() {
       false
     );
   };
-
 
   /* =======================================================
      Wishlist
@@ -538,7 +524,6 @@ function Navbar() {
       );
     };
 
-
   /* =======================================================
      Account
   ======================================================= */
@@ -560,7 +545,6 @@ function Navbar() {
       );
     };
 
-
   const handleAccountNavigation = (
     path
   ) => {
@@ -574,7 +558,6 @@ function Navbar() {
 
     navigate(path);
   };
-
 
   /* =======================================================
      Logout
@@ -604,7 +587,6 @@ function Navbar() {
       }
     };
 
-
   /* =======================================================
      UI
   ======================================================= */
@@ -615,42 +597,50 @@ function Navbar() {
           Announcement Bar
       =================================================== */}
 
-      <div className="overflow-hidden bg-black py-2 text-xs font-semibold text-white">
-        <div className="whitespace-nowrap text-center">
-          <span className="mx-8">
-            🚚 Free Shipping on Orders Above ₹999
-          </span>
+      <div className="announcement-bar">
+        <div className="announcement-track">
 
-          <span className="mx-8">
-            🔥 Up to 50% OFF
-          </span>
+          <div className="announcement-group">
+            <span>
+              🚚 Free Shipping on Orders Above ₹999
+            </span>
 
-          <span className="mx-8">
-            ↩ 7 Days Return
-          </span>
+            <span>
+              🔥 Up to 50% OFF
+            </span>
 
-          <span className="mx-8">
-            ☎ Customer Support
-          </span>
+            <span>
+              ↩️ 7 Days Return
+            </span>
 
-          <span className="mx-8">
-            🚚 Free Shipping on Orders Above ₹999
-          </span>
+            <span>
+              ☎️ Customer Support
+            </span>
+          </div>
 
-          <span className="mx-8">
-            🔥 Up to 50% OFF
-          </span>
+          <div
+            className="announcement-group"
+            aria-hidden="true"
+          >
+            <span>
+              🚚 Free Shipping on Orders Above ₹999
+            </span>
 
-          <span className="mx-8">
-            ↩ 7 Days Return
-          </span>
+            <span>
+              🔥 Up to 50% OFF
+            </span>
 
-          <span className="mx-8">
-            ☎ Customer Support
-          </span>
+            <span>
+              ↩️ 7 Days Return
+            </span>
+
+            <span>
+              ☎️ Customer Support
+            </span>
+          </div>
+
         </div>
       </div>
-
 
       {/* ===================================================
           Main Navbar
@@ -696,7 +686,6 @@ function Navbar() {
             </button>
           </div>
 
-
           {/* Mobile Menu */}
 
           <button
@@ -718,7 +707,6 @@ function Navbar() {
               ? "✕"
               : "☰"}
           </button>
-
 
           {/* Logo */}
 
@@ -742,7 +730,6 @@ function Navbar() {
             </span>
           </Link>
 
-
           {/* Right Actions */}
 
           <div className="flex items-center justify-end gap-3 text-xl text-black sm:gap-4">
@@ -760,7 +747,6 @@ function Navbar() {
             >
               🔍
             </button>
-
 
             {/* Wishlist */}
 
@@ -800,7 +786,6 @@ function Navbar() {
               )}
             </button>
 
-
             {/* Cart */}
 
             <button
@@ -821,7 +806,6 @@ function Navbar() {
                 </span>
               )}
             </button>
-
 
             {/* Account */}
 
@@ -888,7 +872,6 @@ function Navbar() {
                 )}
               </button>
 
-
               {/* Account Dropdown */}
 
               {isAuthenticated &&
@@ -926,7 +909,6 @@ function Navbar() {
                       )}
                     </div>
 
-
                     <div className="py-2 text-sm">
 
                       {/* Admin Dashboard */}
@@ -955,7 +937,6 @@ function Navbar() {
                         </>
                       )}
 
-
                       <button
                         type="button"
                         onClick={() =>
@@ -973,7 +954,6 @@ function Navbar() {
                           My Profile
                         </span>
                       </button>
-
 
                       <button
                         type="button"
@@ -993,7 +973,6 @@ function Navbar() {
                         </span>
                       </button>
 
-
                       <button
                         type="button"
                         onClick={() =>
@@ -1012,7 +991,6 @@ function Navbar() {
                         </span>
                       </button>
 
-
                       <button
                         type="button"
                         onClick={() =>
@@ -1030,7 +1008,6 @@ function Navbar() {
                           Saved Addresses
                         </span>
                       </button>
-
 
                       <button
                         type="button"
@@ -1061,7 +1038,6 @@ function Navbar() {
                       </button>
                     </div>
 
-
                     <div className="border-t p-2">
                       <button
                         type="button"
@@ -1085,7 +1061,6 @@ function Navbar() {
             </div>
           </div>
         </div>
-
 
         {/* =================================================
             Desktop Navigation
@@ -1111,7 +1086,6 @@ function Navbar() {
                 Shop
               </Link>
             </li>
-
 
             {!menuLoading &&
               navigationDepartments.map(
@@ -1146,7 +1120,6 @@ function Navbar() {
                       )}
                     </button>
 
-
                     {department
                       .categories
                       .length >
@@ -1179,7 +1152,6 @@ function Navbar() {
                           </button>
                         </div>
 
-
                         <div className="grid grid-cols-3 gap-7">
 
                           {department.categories.map(
@@ -1205,7 +1177,6 @@ function Navbar() {
                                     category.name
                                   }
                                 </button>
-
 
                                 {category
                                   .subcategories
@@ -1255,7 +1226,6 @@ function Navbar() {
                 )
               )}
 
-
             <li>
               <Link
                 to="/new-arrivals"
@@ -1264,7 +1234,6 @@ function Navbar() {
                 New Arrivals
               </Link>
             </li>
-
 
             <li>
               <Link
@@ -1275,7 +1244,6 @@ function Navbar() {
               </Link>
             </li>
 
-
             <li>
               <Link
                 to="/clearance-sale"
@@ -1284,7 +1252,6 @@ function Navbar() {
                 Clearance Sale
               </Link>
             </li>
-
 
             <li className="group relative">
               <Link
@@ -1323,7 +1290,6 @@ function Navbar() {
               </div>
             </li>
 
-
             <li>
               <Link
                 to="/return-exchange"
@@ -1332,7 +1298,6 @@ function Navbar() {
                 Return / Exchange
               </Link>
             </li>
-
 
             {/* Admin Navigation */}
 
@@ -1349,7 +1314,6 @@ function Navbar() {
 
           </ul>
         </div>
-
 
         {/* =================================================
             Mobile Navigation
@@ -1406,7 +1370,6 @@ function Navbar() {
                     </div>
                   </div>
 
-
                   {/* Admin Dashboard Mobile */}
 
                   {isAdmin && (
@@ -1423,7 +1386,6 @@ function Navbar() {
                     </button>
                   )}
 
-
                   <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
 
                     <button
@@ -1438,7 +1400,6 @@ function Navbar() {
                       Profile
                     </button>
 
-
                     <button
                       type="button"
                       onClick={() =>
@@ -1450,7 +1411,6 @@ function Navbar() {
                     >
                       My Orders
                     </button>
-
 
                     <button
                       type="button"
@@ -1467,7 +1427,6 @@ function Navbar() {
                         : ""}
                     </button>
 
-
                     <button
                       type="button"
                       onClick={() =>
@@ -1480,7 +1439,6 @@ function Navbar() {
                       My Reviews
                     </button>
                   </div>
-
 
                   <button
                     type="button"
@@ -1509,7 +1467,6 @@ function Navbar() {
                 </button>
               )}
             </div>
-
 
             {/* Mobile Search */}
 
@@ -1554,7 +1511,6 @@ function Navbar() {
               </button>
             </div>
 
-
             {/* Mobile Links */}
 
             <div className="space-y-2">
@@ -1571,7 +1527,6 @@ function Navbar() {
                 Home
               </Link>
 
-
               <Link
                 to="/shop"
                 onClick={() =>
@@ -1584,7 +1539,6 @@ function Navbar() {
                 Shop
               </Link>
 
-
               {!isAuthenticated && (
                 <button
                   type="button"
@@ -1596,7 +1550,6 @@ function Navbar() {
                   Wishlist
                 </button>
               )}
-
 
               {navigationDepartments.map(
                 (
@@ -1626,7 +1579,6 @@ function Navbar() {
                         }
                       </button>
 
-
                       {department
                         .categories
                         .length >
@@ -1654,7 +1606,6 @@ function Navbar() {
                         </button>
                       )}
                     </div>
-
 
                     {openMobileDepartment ===
                       department.id && (
@@ -1685,7 +1636,6 @@ function Navbar() {
                                   category.name
                                 }
                               </button>
-
 
                               <div className="mt-2 space-y-2 pl-3">
 
@@ -1724,7 +1674,6 @@ function Navbar() {
                 )
               )}
 
-
               <Link
                 to="/new-arrivals"
                 onClick={() =>
@@ -1736,7 +1685,6 @@ function Navbar() {
               >
                 New Arrivals
               </Link>
-
 
               <Link
                 to="/offers"
@@ -1750,7 +1698,6 @@ function Navbar() {
                 Offers
               </Link>
 
-
               <Link
                 to="/clearance-sale"
                 onClick={() =>
@@ -1762,7 +1709,6 @@ function Navbar() {
               >
                 Clearance Sale
               </Link>
-
 
               <Link
                 to="/track-order"
@@ -1776,7 +1722,6 @@ function Navbar() {
                 Track Order
               </Link>
 
-
               <Link
                 to="/support"
                 onClick={() =>
@@ -1788,7 +1733,6 @@ function Navbar() {
               >
                 Support
               </Link>
-
 
               <Link
                 to="/return-exchange"
