@@ -48,7 +48,7 @@ def env_bool(name, default=False):
 
 def env_list(name, default=""):
     """
-    Convert comma-separated env variable into list.
+    Convert comma-separated environment variable into list.
     """
 
     return [
@@ -62,6 +62,10 @@ def env_list(name, default=""):
 
 
 def env_int(name, default):
+    """
+    Convert environment variable into integer.
+    """
+
     try:
         return int(
             os.getenv(
@@ -145,6 +149,7 @@ X_FRAME_OPTIONS = "DENY"
 SECURE_REFERRER_POLICY = (
     "strict-origin-when-cross-origin"
 )
+
 
 if not DEBUG:
 
@@ -380,8 +385,6 @@ else:
     }
 
 
-# Prevent accidental SQLite production deployment
-
 if (
     not DEBUG
     and DATABASE_ENGINE == "sqlite"
@@ -390,7 +393,6 @@ if (
         default=False,
     )
 ):
-
     raise ImproperlyConfigured(
         "SQLite is disabled for production. "
         "Configure PostgreSQL or set "
@@ -409,21 +411,18 @@ AUTH_PASSWORD_VALIDATORS = [
             "UserAttributeSimilarityValidator"
         ),
     },
-
     {
         "NAME": (
             "django.contrib.auth.password_validation."
             "MinimumLengthValidator"
         ),
     },
-
     {
         "NAME": (
             "django.contrib.auth.password_validation."
             "CommonPasswordValidator"
         ),
     },
-
     {
         "NAME": (
             "django.contrib.auth.password_validation."
@@ -457,24 +456,26 @@ STATIC_ROOT = (
 )
 
 
-if USE_WHITENOISE:
+# Always define the storage backends.
+# This ensures collectstatic creates a valid manifest
+# inside the Docker image.
 
-    STORAGES = {
+STORAGES = {
 
-        "default": {
-            "BACKEND": (
-                "django.core.files.storage."
-                "FileSystemStorage"
-            ),
-        },
+    "default": {
+        "BACKEND": (
+            "django.core.files.storage."
+            "FileSystemStorage"
+        ),
+    },
 
-        "staticfiles": {
-            "BACKEND": (
-                "whitenoise.storage."
-                "CompressedManifestStaticFilesStorage"
-            ),
-        },
-    }
+    "staticfiles": {
+        "BACKEND": (
+            "whitenoise.storage."
+            "CompressedManifestStaticFilesStorage"
+        ),
+    },
+}
 
 
 # =========================================================
@@ -664,7 +665,6 @@ if (
     EMAIL_USE_TLS
     and EMAIL_USE_SSL
 ):
-
     raise ImproperlyConfigured(
         "EMAIL_USE_TLS and EMAIL_USE_SSL "
         "cannot both be True."
@@ -1097,14 +1097,12 @@ if not DEBUG:
             "for production."
         )
 
-
     if not CSRF_TRUSTED_ORIGINS:
 
         raise ImproperlyConfigured(
             "CSRF_TRUSTED_ORIGINS must be configured "
             "for production."
         )
-
 
     if SECRET_KEY.startswith(
         "django-insecure"
