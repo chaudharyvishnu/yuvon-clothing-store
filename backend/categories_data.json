@@ -1,0 +1,278 @@
+[
+  {
+    "model": "categories.category",
+    "pk": 101,
+    "fields": {
+      "department": 1,
+      "name": "Clothing",
+      "slug": "men-clothing",
+      "image": "",
+      "is_active": true,
+      "show_in_navbar": true,
+      "order": 1
+    }
+  },
+  {
+    "model": "categories.category",
+    "pk": 102,
+    "fields": {
+      "department": 2,
+      "name": "Clothing",
+      "slug": "women-clothing",
+      "image": "",
+      "is_active": true,
+      "show_in_navbar": true,
+      "order": 1
+    }
+  },
+  {
+    "model": "categories.category",
+    "pk": 103,
+    "fields": {
+      "department": 3,
+      "name": "Clothing",
+      "slug": "kids-clothing",
+      "image": "",
+      "is_active": true,
+      "show_in_navbar": true,
+      "order": 1
+    }
+  },
+
+  {
+    "model": "categories.subcategory",
+    "pk": 201,
+    "fields": {
+      "category": 101,
+      "name": "T-Shirts",
+      "slug": "men-clothing-t-shirts",
+      "image": "",
+      "is_active": true,
+      "show_in_navbar": true,
+      "order": 1
+    }
+  },
+  {
+    "model": "categories.subcategory",
+    "pk": 202,
+    "fields": {
+      "category": 101,
+      "name": "Shirts",
+      "slug": "men-clothing-shirts",
+      "image": "",
+      "is_active": true,
+      "show_in_navbar": true,
+      "order": 2
+    }
+  },
+  {
+    "model": "categories.subcategory",
+    "pk": 203,
+    "fields": {
+      "category": 101,
+      "name": "Jeans",
+      "slug": "men-clothing-jeans",
+      "image": "",
+      "is_active": true,
+      "show_in_navbar": true,
+      "order": 3
+    }
+  },
+  {
+    "model": "categories.subcategory",
+    "pk": 204,
+    "fields": {
+      "category": 101,
+      "name": "Trousers",
+      "slug": "men-clothing-trousers",
+      "image": "",
+      "is_active": true,
+      "show_in_navbar": true,
+      "order": 4
+    }
+  },
+  {
+    "model": "categories.subcategory",
+    "pk": 205,
+    "fields": {
+      "category": 101,
+      "name": "Hoodies",
+      "slug": "men-clothing-hoodies",
+      "image": "",
+      "is_active": true,
+      "show_in_navbar": true,
+      "order": 5
+    }
+  },
+  {
+    "model": "categories.subcategory",
+    "pk": 206,
+    "fields": {
+      "category": 101,
+      "name": "Jackets",
+      "slug": "men-clothing-jackets",
+      "image": "",
+      "is_active": true,
+      "show_in_navbar": true,
+      "order": 6
+    }
+  },
+
+  {
+    "model": "categories.subcategory",
+    "pk": 211,
+    "fields": {
+      "category": 102,
+      "name": "Tops",
+      "slug": "women-clothing-tops",
+      "image": "",
+      "is_active": true,
+      "show_in_navbar": true,
+      "order": 1
+    }
+  },
+  {
+    "model": "categories.subcategory",
+    "pk": 212,
+    "fields": {
+      "category": 102,
+      "name": "Dresses",
+      "slug": "women-clothing-dresses",
+      "image": "",
+      "is_active": true,
+      "show_in_navbar": true,
+      "order": 2
+    }
+  },
+  {
+    "model": "categories.subcategory",
+    "pk": 213,
+    "fields": {
+      "category": 102,
+      "name": "Kurtis",
+      "slug": "women-clothing-kurtis",
+      "image": "",
+      "is_active": true,
+      "show_in_navbar": true,
+      "order": 3
+    }
+  },
+  {
+    "model": "categories.subcategory",
+    "pk": 214,
+    "fields": {
+      "category": 102,
+      "name": "Jeans",
+      "slug": "women-clothing-jeans",
+      "image": "",
+      "is_active": true,
+      "show_in_navbar": true,
+      "order": 4
+    }
+  },
+  {
+    "model": "categories.subcategory",
+    "pk": 215,
+    "fields": {
+      "category": 102,
+      "name": "Sarees",
+      "slug": "women-clothing-sarees",
+      "image": "",
+      "is_active": true,
+      "show_in_navbar": true,
+      "order": 5
+    }
+  },
+  {
+    "model": "categories.subcategory",
+    "pk": 216,
+    "fields": {
+      "category": 102,
+      "name": "T-Shirts",
+      "slug": "women-clothing-t-shirts",
+      "image": "",
+      "is_active": true,
+      "show_in_navbar": true,
+      "order": 6
+    }
+  },
+
+  {
+    "model": "categories.subcategory",
+    "pk": 221,
+    "fields": {
+      "category": 103,
+      "name": "T-Shirts",
+      "slug": "kids-clothing-t-shirts",
+      "image": "",
+      "is_active": true,
+      "show_in_navbar": true,
+      "order": 1
+    }
+  },
+  {
+    "model": "categories.subcategory",
+    "pk": 222,
+    "fields": {
+      "category": 103,
+      "name": "Shirts",
+      "slug": "kids-clothing-shirts",
+      "image": "",
+      "is_active": true,
+      "show_in_navbar": true,
+      "order": 2
+    }
+  },
+  {
+    "model": "categories.subcategory",
+    "pk": 223,
+    "fields": {
+      "category": 103,
+      "name": "Dresses",
+      "slug": "kids-clothing-dresses",
+      "image": "",
+      "is_active": true,
+      "show_in_navbar": true,
+      "order": 3
+    }
+  },
+  {
+    "model": "categories.subcategory",
+    "pk": 224,
+    "fields": {
+      "category": 103,
+      "name": "Jeans",
+      "slug": "kids-clothing-jeans",
+      "image": "",
+      "is_active": true,
+      "show_in_navbar": true,
+      "order": 4
+    }
+  },
+  {
+    "model": "categories.subcategory",
+    "pk": 225,
+    "fields": {
+      "category": 103,
+      "name": "Shorts",
+      "slug": "kids-clothing-shorts",
+      "image": "",
+      "is_active": true,
+      "show_in_navbar": true,
+      "order": 5
+    }
+  },
+  {
+    "model": "categories.subcategory",
+    "pk": 226,
+    "fields": {
+      "category": 103,
+      "name": "Sets",
+      "slug": "kids-clothing-sets",
+      "image": "",
+      "is_active": true,
+      "show_in_navbar": true,
+      "order": 6
+    }
+  }
+]
