@@ -50,12 +50,57 @@ function getUserDisplayName(user) {
   );
 }
 
+function normalizeList(response) {
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  if (
+    response &&
+    Array.isArray(response.results)
+  ) {
+    return response.results;
+  }
+
+  return [];
+}
+
+function getRelatedId(
+  item,
+  directKey,
+  relationKey
+) {
+  return (
+    item?.[directKey] ??
+    item?.[relationKey]?.id ??
+    (
+      typeof item?.[relationKey] ===
+      "number"
+        ? item[relationKey]
+        : null
+    )
+  );
+}
+
+function getRelatedSlug(
+  item,
+  directKey,
+  relationKey
+) {
+  return (
+    item?.[directKey] ??
+    item?.[relationKey]?.slug ??
+    null
+  );
+}
+
 /* =========================================================
    Navbar
 ========================================================= */
 
 function Navbar() {
-  const navigate = useNavigate();
+  const navigate =
+    useNavigate();
 
   const accountMenuRef =
     useRef(null);
@@ -66,7 +111,7 @@ function Navbar() {
 
   const {
     openCart,
-    cartItems,
+    cartItems = [],
     totalItems,
   } = useCart();
 
@@ -80,7 +125,7 @@ function Navbar() {
   } = useAuth();
 
   const {
-    wishlistItems,
+    wishlistItems = [],
     loading: wishlistLoading,
   } = useWishlist();
 
@@ -138,7 +183,7 @@ function Navbar() {
       (total, item) =>
         total +
         Number(
-          item.quantity || 1
+          item?.quantity || 1
         ),
       0
     );
@@ -168,6 +213,8 @@ function Navbar() {
   ======================================================= */
 
   useEffect(() => {
+    let isMounted = true;
+
     const loadNavigationData =
       async () => {
         setMenuLoading(true);
@@ -177,76 +224,104 @@ function Navbar() {
             departmentsResponse,
             categoriesResponse,
             subCategoriesResponse,
-          ] = await Promise.all([
-            fetchDepartments(),
-            fetchCategories(),
-            fetchSubCategories(),
-          ]);
+          ] =
+            await Promise.all([
+              fetchDepartments(),
+              fetchCategories(),
+              fetchSubCategories(),
+            ]);
+
+          if (!isMounted) {
+            return;
+          }
 
           const departmentList =
-            Array.isArray(
+            normalizeList(
               departmentsResponse
-            )
-              ? departmentsResponse
-              : departmentsResponse
-                  ?.results || [];
+            );
 
           const categoryList =
-            Array.isArray(
+            normalizeList(
               categoriesResponse
-            )
-              ? categoriesResponse
-              : categoriesResponse
-                  ?.results || [];
+            );
 
           const subCategoryList =
-            Array.isArray(
+            normalizeList(
               subCategoriesResponse
-            )
-              ? subCategoriesResponse
-              : subCategoriesResponse
-                  ?.results || [];
+            );
 
-          setDepartments(
+          const activeDepartments =
             departmentList.filter(
               (department) =>
+                department &&
                 department.is_active !==
                   false &&
                 department.show_in_navbar !==
                   false
-            )
+            );
+
+          const activeCategories =
+            categoryList.filter(
+              (category) =>
+                category &&
+                category.is_active !==
+                  false
+            );
+
+          const activeSubCategories =
+            subCategoryList.filter(
+              (subCategory) =>
+                subCategory &&
+                subCategory.is_active !==
+                  false
+            );
+
+          setDepartments(
+            activeDepartments
           );
 
           setCategories(
-            categoryList.filter(
-              (category) =>
-                category.is_active !==
-                false
-            )
+            activeCategories
           );
 
           setSubCategories(
-            subCategoryList.filter(
-              (subCategory) =>
-                subCategory.is_active !==
-                false
-            )
+            activeSubCategories
+          );
+
+          console.info(
+            "Navbar navigation loaded:",
+            {
+              departments:
+                activeDepartments.length,
+              categories:
+                activeCategories.length,
+              subCategories:
+                activeSubCategories.length,
+            }
           );
         } catch (error) {
           console.error(
-            "Navbar categories load error:",
+            "Navbar navigation API error:",
             error
           );
 
-          setDepartments([]);
-          setCategories([]);
-          setSubCategories([]);
+          if (isMounted) {
+            setDepartments([]);
+            setCategories([]);
+            setSubCategories([]);
+          }
         } finally {
-          setMenuLoading(false);
+          if (isMounted) {
+            setMenuLoading(false);
+          }
         }
       };
 
     loadNavigationData();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   /* =======================================================
@@ -326,81 +401,118 @@ function Navbar() {
 
   const navigationDepartments =
     useMemo(() => {
-      return departments.map(
-        (department) => {
-          const departmentCategories =
-            categories
-              .filter(
-                (category) => {
-                  const
-                    categoryDepartmentId =
-                      category.department_id ??
-                      category.department
-                        ?.id ??
-                      category.department;
-
-                  const
-                    categoryDepartmentSlug =
-                      category.department_slug ??
-                      category.department
-                        ?.slug;
-
-                  return (
-                    categoryDepartmentId ===
-                      department.id ||
-                    categoryDepartmentSlug ===
-                      department.slug
-                  );
-                }
-              )
-              .map(
-                (category) => {
-                  const
-                    categorySubCategories =
-                      subCategories.filter(
-                        (
-                          subCategory
-                        ) => {
-                          const
-                            subCategoryCategoryId =
-                              subCategory.category_id ??
-                              subCategory
-                                .category
-                                ?.id ??
-                              subCategory
-                                .category;
-
-                          const
-                            subCategoryCategorySlug =
-                              subCategory.category_slug ??
-                              subCategory
-                                .category
-                                ?.slug;
-
-                          return (
-                            subCategoryCategoryId ===
-                              category.id ||
-                            subCategoryCategorySlug ===
-                              category.slug
+      return departments
+        .filter(
+          (department) =>
+            department?.slug &&
+            department?.name
+        )
+        .map(
+          (department) => {
+            const
+              departmentCategories =
+                categories
+                  .filter(
+                    (category) => {
+                      const
+                        categoryDepartmentId =
+                          getRelatedId(
+                            category,
+                            "department_id",
+                            "department"
                           );
-                        }
+
+                      const
+                        categoryDepartmentSlug =
+                          getRelatedSlug(
+                            category,
+                            "department_slug",
+                            "department"
+                          );
+
+                      return (
+                        categoryDepartmentId ===
+                          department.id ||
+                        String(
+                          categoryDepartmentSlug ||
+                            ""
+                        ) ===
+                          String(
+                            department.slug ||
+                              ""
+                          )
                       );
+                    }
+                  )
+                  .filter(
+                    (category) =>
+                      category?.slug &&
+                      category?.name
+                  )
+                  .map(
+                    (category) => {
+                      const
+                        categorySubCategories =
+                          subCategories
+                            .filter(
+                              (
+                                subCategory
+                              ) => {
+                                const
+                                  subCategoryCategoryId =
+                                    getRelatedId(
+                                      subCategory,
+                                      "category_id",
+                                      "category"
+                                    );
 
-                  return {
-                    ...category,
-                    subcategories:
-                      categorySubCategories,
-                  };
-                }
-              );
+                                const
+                                  subCategoryCategorySlug =
+                                    getRelatedSlug(
+                                      subCategory,
+                                      "category_slug",
+                                      "category"
+                                    );
 
-          return {
-            ...department,
-            categories:
-              departmentCategories,
-          };
-        }
-      );
+                                return (
+                                  subCategoryCategoryId ===
+                                    category.id ||
+                                  String(
+                                    subCategoryCategorySlug ||
+                                      ""
+                                  ) ===
+                                    String(
+                                      category.slug ||
+                                        ""
+                                    )
+                                );
+                              }
+                            )
+                            .filter(
+                              (
+                                subCategory
+                              ) =>
+                                subCategory?.slug &&
+                                subCategory?.name
+                            );
+
+                      return {
+                        ...category,
+
+                        subcategories:
+                          categorySubCategories,
+                      };
+                    }
+                  );
+
+            return {
+              ...department,
+
+              categories:
+                departmentCategories,
+            };
+          }
+        );
     }, [
       departments,
       categories,
@@ -445,6 +557,10 @@ function Navbar() {
   const handleDepartmentClick = (
     departmentSlug
   ) => {
+    if (!departmentSlug) {
+      return;
+    }
+
     navigate(
       `/shop?department=${encodeURIComponent(
         departmentSlug
@@ -459,6 +575,10 @@ function Navbar() {
   const handleCategoryClick = (
     categorySlug
   ) => {
+    if (!categorySlug) {
+      return;
+    }
+
     navigate(
       `/shop?category=${encodeURIComponent(
         categorySlug
@@ -473,6 +593,10 @@ function Navbar() {
   const handleSubCategoryClick = (
     subCategorySlug
   ) => {
+    if (!subCategorySlug) {
+      return;
+    }
+
     navigate(
       `/shop?subcategory=${encodeURIComponent(
         subCategorySlug
@@ -593,10 +717,6 @@ function Navbar() {
 
   return (
     <>
-      {/* ===================================================
-          Announcement Bar
-      =================================================== */}
-
       <div className="announcement-bar">
         <div className="announcement-track">
 
@@ -642,15 +762,9 @@ function Navbar() {
         </div>
       </div>
 
-      {/* ===================================================
-          Main Navbar
-      =================================================== */}
-
       <nav className="sticky top-0 z-50 border-b bg-white shadow-sm">
 
         <div className="mx-auto grid max-w-7xl grid-cols-3 items-center px-4 py-4 sm:px-6">
-
-          {/* Desktop Search */}
 
           <div className="hidden h-10 w-64 items-center rounded-md border border-gray-300 px-3 md:flex">
             <input
@@ -686,8 +800,6 @@ function Navbar() {
             </button>
           </div>
 
-          {/* Mobile Menu */}
-
           <button
             type="button"
             onClick={() =>
@@ -707,8 +819,6 @@ function Navbar() {
               ? "✕"
               : "☰"}
           </button>
-
-          {/* Logo */}
 
           <Link
             to="/"
@@ -730,8 +840,6 @@ function Navbar() {
             </span>
           </Link>
 
-          {/* Right Actions */}
-
           <div className="flex items-center justify-end gap-3 text-xl text-black sm:gap-4">
 
             <button
@@ -747,8 +855,6 @@ function Navbar() {
             >
               🔍
             </button>
-
-            {/* Wishlist */}
 
             <button
               type="button"
@@ -786,8 +892,6 @@ function Navbar() {
               )}
             </button>
 
-            {/* Cart */}
-
             <button
               type="button"
               onClick={openCart}
@@ -806,8 +910,6 @@ function Navbar() {
                 </span>
               )}
             </button>
-
-            {/* Account */}
 
             <div
               ref={
@@ -872,8 +974,6 @@ function Navbar() {
                 )}
               </button>
 
-              {/* Account Dropdown */}
-
               {isAuthenticated &&
                 accountMenuOpen && (
                   <div className="absolute right-0 top-full z-[70] mt-3 w-64 overflow-hidden rounded-2xl border bg-white shadow-2xl">
@@ -910,8 +1010,6 @@ function Navbar() {
                     </div>
 
                     <div className="py-2 text-sm">
-
-                      {/* Admin Dashboard */}
 
                       {isAdmin && (
                         <>
@@ -1062,10 +1160,6 @@ function Navbar() {
           </div>
         </div>
 
-        {/* =================================================
-            Desktop Navigation
-        ================================================= */}
-
         <div className="border-t">
           <ul className="mx-auto hidden max-w-7xl items-center justify-center gap-7 px-6 py-3 text-[14px] font-medium text-black lg:flex">
 
@@ -1153,7 +1247,6 @@ function Navbar() {
                         </div>
 
                         <div className="grid grid-cols-3 gap-7">
-
                           {department.categories.map(
                             (
                               category
@@ -1183,7 +1276,6 @@ function Navbar() {
                                   .length >
                                   0 && (
                                   <div className="mt-3 space-y-2">
-
                                     {category
                                       .subcategories
                                       .slice(
@@ -1218,7 +1310,6 @@ function Navbar() {
                               </div>
                             )
                           )}
-
                         </div>
                       </div>
                     )}
@@ -1299,8 +1390,6 @@ function Navbar() {
               </Link>
             </li>
 
-            {/* Admin Navigation */}
-
             {isAdmin && (
               <li>
                 <Link
@@ -1315,14 +1404,8 @@ function Navbar() {
           </ul>
         </div>
 
-        {/* =================================================
-            Mobile Navigation
-        ================================================= */}
-
         {mobileMenuOpen && (
           <div className="max-h-[75vh] overflow-y-auto border-t bg-white px-4 py-5 lg:hidden">
-
-            {/* Mobile Account */}
 
             <div className="mb-5 rounded-2xl border bg-gray-50 p-4">
 
@@ -1369,8 +1452,6 @@ function Navbar() {
                       )}
                     </div>
                   </div>
-
-                  {/* Admin Dashboard Mobile */}
 
                   {isAdmin && (
                     <button
@@ -1468,8 +1549,6 @@ function Navbar() {
               )}
             </div>
 
-            {/* Mobile Search */}
-
             <div className="mb-5 flex items-center rounded-xl border px-3">
 
               <input
@@ -1511,8 +1590,6 @@ function Navbar() {
               </button>
             </div>
 
-            {/* Mobile Links */}
-
             <div className="space-y-2">
 
               <Link
@@ -1551,128 +1628,129 @@ function Navbar() {
                 </button>
               )}
 
-              {navigationDepartments.map(
-                (
-                  department
-                ) => (
-                  <div
-                    key={
-                      department.id ||
-                      department.slug
-                    }
-                    className="rounded-xl border"
-                  >
+              {!menuLoading &&
+                navigationDepartments.map(
+                  (
+                    department
+                  ) => (
+                    <div
+                      key={
+                        department.id ||
+                        department.slug
+                      }
+                      className="rounded-xl border"
+                    >
 
-                    <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between">
 
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleDepartmentClick(
-                            department.slug
-                          )
-                        }
-                        className="flex-1 px-4 py-3 text-left font-semibold"
-                      >
-                        {
-                          department.name
-                        }
-                      </button>
-
-                      {department
-                        .categories
-                        .length >
-                        0 && (
                         <button
                           type="button"
                           onClick={() =>
-                            setOpenMobileDepartment(
-                              (
-                                current
-                              ) =>
-                                current ===
-                                department.id
-                                  ? null
-                                  : department.id
+                            handleDepartmentClick(
+                              department.slug
                             )
                           }
-                          className="px-4 py-3"
-                          aria-label={`Toggle ${department.name} categories`}
+                          className="flex-1 px-4 py-3 text-left font-semibold"
                         >
-                          {openMobileDepartment ===
-                          department.id
-                            ? "−"
-                            : "+"}
+                          {
+                            department.name
+                          }
                         </button>
+
+                        {department
+                          .categories
+                          .length >
+                          0 && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOpenMobileDepartment(
+                                (
+                                  current
+                                ) =>
+                                  current ===
+                                  department.id
+                                    ? null
+                                    : department.id
+                              )
+                            }
+                            className="px-4 py-3"
+                            aria-label={`Toggle ${department.name} categories`}
+                          >
+                            {openMobileDepartment ===
+                            department.id
+                              ? "−"
+                              : "+"}
+                          </button>
+                        )}
+                      </div>
+
+                      {openMobileDepartment ===
+                        department.id && (
+                        <div className="border-t bg-gray-50 px-4 py-3">
+
+                          {department.categories.map(
+                            (
+                              category
+                            ) => (
+                              <div
+                                key={
+                                  category.id ||
+                                  category.slug
+                                }
+                                className="mb-4 last:mb-0"
+                              >
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleCategoryClick(
+                                      category.slug
+                                    )
+                                  }
+                                  className="font-semibold text-gray-900"
+                                >
+                                  {
+                                    category.name
+                                  }
+                                </button>
+
+                                <div className="mt-2 space-y-2 pl-3">
+
+                                  {category.subcategories.map(
+                                    (
+                                      subCategory
+                                    ) => (
+                                      <button
+                                        key={
+                                          subCategory.id ||
+                                          subCategory.slug
+                                        }
+                                        type="button"
+                                        onClick={() =>
+                                          handleSubCategoryClick(
+                                            subCategory.slug
+                                          )
+                                        }
+                                        className="block text-sm text-gray-600"
+                                      >
+                                        {
+                                          subCategory.name
+                                        }
+                                      </button>
+                                    )
+                                  )}
+
+                                </div>
+                              </div>
+                            )
+                          )}
+
+                        </div>
                       )}
                     </div>
-
-                    {openMobileDepartment ===
-                      department.id && (
-                      <div className="border-t bg-gray-50 px-4 py-3">
-
-                        {department.categories.map(
-                          (
-                            category
-                          ) => (
-                            <div
-                              key={
-                                category.id ||
-                                category.slug
-                              }
-                              className="mb-4 last:mb-0"
-                            >
-
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleCategoryClick(
-                                    category.slug
-                                  )
-                                }
-                                className="font-semibold text-gray-900"
-                              >
-                                {
-                                  category.name
-                                }
-                              </button>
-
-                              <div className="mt-2 space-y-2 pl-3">
-
-                                {category.subcategories.map(
-                                  (
-                                    subCategory
-                                  ) => (
-                                    <button
-                                      key={
-                                        subCategory.id ||
-                                        subCategory.slug
-                                      }
-                                      type="button"
-                                      onClick={() =>
-                                        handleSubCategoryClick(
-                                          subCategory.slug
-                                        )
-                                      }
-                                      className="block text-sm text-gray-600"
-                                    >
-                                      {
-                                        subCategory.name
-                                      }
-                                    </button>
-                                  )
-                                )}
-
-                              </div>
-                            </div>
-                          )
-                        )}
-
-                      </div>
-                    )}
-                  </div>
-                )
-              )}
+                  )
+                )}
 
               <Link
                 to="/new-arrivals"
@@ -1754,6 +1832,5 @@ function Navbar() {
     </>
   );
 }
-
 
 export default Navbar;
