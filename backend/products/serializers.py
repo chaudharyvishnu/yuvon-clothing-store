@@ -12,17 +12,64 @@ from .models import (
 
 
 # =========================================================
+# Shared Helpers
+# =========================================================
+
+def build_file_url(serializer, file_field):
+    """
+    Safely return an absolute URL for a Django File/ImageField.
+    """
+
+    if not file_field:
+        return None
+
+    try:
+        file_url = file_field.url
+    except (
+        ValueError,
+        AttributeError,
+    ):
+        return None
+
+    request = serializer.context.get(
+        "request"
+    )
+
+    if request:
+        return request.build_absolute_uri(
+            file_url
+        )
+
+    return file_url
+
+
+# =========================================================
 # Brand
 # =========================================================
 
 class BrandSerializer(serializers.ModelSerializer):
+    logo_url = serializers.SerializerMethodField()
+
     class Meta:
         model = Brand
+
         fields = (
             "id",
             "name",
             "slug",
+            "logo",
+            "logo_url",
             "is_active",
+        )
+
+        read_only_fields = (
+            "id",
+        )
+
+    def get_logo_url(self, obj):
+        return build_file_url(
+            self,
+            obj.logo,
         )
 
 
@@ -35,6 +82,7 @@ class ProductImageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ProductImage
+
         fields = (
             "id",
             "image",
@@ -43,23 +91,15 @@ class ProductImageSerializer(serializers.ModelSerializer):
             "order",
         )
 
+        read_only_fields = (
+            "id",
+        )
+
     def get_image_url(self, obj):
-        if not obj.image:
-            return None
-
-        request = self.context.get("request")
-
-        try:
-            image_url = obj.image.url
-        except ValueError:
-            return None
-
-        if request:
-            return request.build_absolute_uri(
-                image_url
-            )
-
-        return image_url
+        return build_file_url(
+            self,
+            obj.image,
+        )
 
 
 # =========================================================
@@ -71,6 +111,7 @@ class ProductVariantSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ProductVariant
+
         fields = (
             "id",
             "color",
@@ -82,10 +123,17 @@ class ProductVariantSerializer(serializers.ModelSerializer):
             "is_in_stock",
         )
 
+        read_only_fields = (
+            "id",
+            "is_in_stock",
+        )
+
     def get_is_in_stock(self, obj):
-        return (
+        return bool(
             obj.is_active
-            and int(obj.stock or 0) > 0
+            and int(
+                obj.stock or 0
+            ) > 0
         )
 
 
@@ -94,51 +142,80 @@ class ProductVariantSerializer(serializers.ModelSerializer):
 # =========================================================
 
 class ProductBaseSerializer(serializers.ModelSerializer):
+
+    # -----------------------------------------------------
+    # Brand
+    # -----------------------------------------------------
+
     brand_name = serializers.CharField(
         source="brand.name",
         read_only=True,
+        default=None,
     )
 
     brand_slug = serializers.CharField(
         source="brand.slug",
         read_only=True,
+        default=None,
     )
+
+    # -----------------------------------------------------
+    # Department
+    # -----------------------------------------------------
 
     department_name = serializers.CharField(
         source="department.name",
         read_only=True,
+        default=None,
     )
 
     department_slug = serializers.CharField(
         source="department.slug",
         read_only=True,
+        default=None,
     )
+
+    # -----------------------------------------------------
+    # Category
+    # -----------------------------------------------------
 
     category_name = serializers.CharField(
         source="category.name",
         read_only=True,
+        default=None,
     )
 
     category_slug = serializers.CharField(
         source="category.slug",
         read_only=True,
+        default=None,
     )
+
+    # -----------------------------------------------------
+    # Subcategory
+    # -----------------------------------------------------
 
     subcategory_name = serializers.CharField(
         source="subcategory.name",
         read_only=True,
-        allow_null=True,
+        default=None,
     )
 
     subcategory_slug = serializers.CharField(
         source="subcategory.slug",
         read_only=True,
-        allow_null=True,
+        default=None,
     )
+
+    # -----------------------------------------------------
+    # Computed values
+    # -----------------------------------------------------
 
     main_image_url = serializers.SerializerMethodField()
 
+    discount_amount = serializers.SerializerMethodField()
     discount_percentage = serializers.SerializerMethodField()
+
     total_stock = serializers.SerializerMethodField()
     is_in_stock = serializers.SerializerMethodField()
 
@@ -149,67 +226,106 @@ class ProductBaseSerializer(serializers.ModelSerializer):
     total_reviews = serializers.SerializerMethodField()
     rating_breakdown = serializers.SerializerMethodField()
 
-    # -----------------------------------------------------
-    # Main image
-    # -----------------------------------------------------
+    # =====================================================
+    # Main Image
+    # =====================================================
 
     def get_main_image_url(self, obj):
-        if not obj.main_image:
-            return None
+        return build_file_url(
+            self,
+            obj.main_image,
+        )
 
-        request = self.context.get("request")
+    # =====================================================
+    # Pricing / Discount
+    # =====================================================
 
+    def get_discount_amount(self, obj):
         try:
-            image_url = obj.main_image.url
-        except ValueError:
-            return None
+            amount = obj.discount_amount
+        except (
+            AttributeError,
+            TypeError,
+        ):
+            if (
+                obj.old_price is None
+                or obj.price is None
+                or obj.old_price <= obj.price
+            ):
+                return "0.00"
 
-        if request:
-            return request.build_absolute_uri(
-                image_url
+            amount = (
+                Decimal(str(obj.old_price))
+                - Decimal(str(obj.price))
             )
 
-        return image_url
-
-    # -----------------------------------------------------
-    # Discount
-    # -----------------------------------------------------
+        return str(
+            Decimal(str(amount)).quantize(
+                Decimal("0.01")
+            )
+        )
 
     def get_discount_percentage(self, obj):
-        price = obj.price
-        old_price = obj.old_price
+        try:
+            percentage = obj.discount_percentage
+        except (
+            AttributeError,
+            TypeError,
+        ):
+            price = obj.price
+            old_price = obj.old_price
 
-        if not price or not old_price:
-            return 0
+            if (
+                price is None
+                or old_price is None
+            ):
+                return 0
 
-        price = Decimal(str(price))
-        old_price = Decimal(str(old_price))
+            price = Decimal(
+                str(price)
+            )
 
-        if old_price <= price:
-            return 0
+            old_price = Decimal(
+                str(old_price)
+            )
 
-        discount = (
-            (old_price - price)
-            / old_price
-        ) * Decimal("100")
+            if (
+                old_price <= 0
+                or old_price <= price
+            ):
+                return 0
 
-        return int(round(discount))
+            percentage = (
+                (
+                    old_price
+                    - price
+                )
+                / old_price
+            ) * Decimal("100")
 
-    # -----------------------------------------------------
+        return round(
+            float(percentage or 0),
+            2,
+        )
+
+    # =====================================================
     # Variants
-    # -----------------------------------------------------
+    # =====================================================
 
     def get_active_variants(self, obj):
         prefetched_variants = getattr(
             obj,
             "_prefetched_objects_cache",
             {},
-        ).get("variants")
+        ).get(
+            "variants"
+        )
 
         if prefetched_variants is not None:
             return [
                 variant
-                for variant in prefetched_variants
+                for variant
+                in prefetched_variants
                 if variant.is_active
             ]
 
@@ -220,77 +336,174 @@ class ProductBaseSerializer(serializers.ModelSerializer):
         )
 
     def get_total_stock(self, obj):
-        variants = self.get_active_variants(obj)
+        variants = self.get_active_variants(
+            obj
+        )
 
         return sum(
             max(
-                int(variant.stock or 0),
+                int(
+                    variant.stock or 0
+                ),
                 0,
             )
             for variant in variants
         )
 
     def get_is_in_stock(self, obj):
-        return self.get_total_stock(obj) > 0
+        variants = self.get_active_variants(
+            obj
+        )
+
+        return any(
+            int(
+                variant.stock or 0
+            ) > 0
+            for variant in variants
+        )
 
     def get_available_sizes(self, obj):
-        variants = self.get_active_variants(obj)
+        variants = self.get_active_variants(
+            obj
+        )
 
         sizes = {
-            variant.size.strip()
+            str(
+                variant.size
+            ).strip()
             for variant in variants
             if (
                 variant.size
-                and int(variant.stock or 0) > 0
+                and int(
+                    variant.stock or 0
+                ) > 0
             )
         }
 
-        return sorted(sizes)
+        sizes.discard(
+            ""
+        )
+
+        return sorted(
+            sizes
+        )
 
     def get_available_colors(self, obj):
-        variants = self.get_active_variants(obj)
+        variants = self.get_active_variants(
+            obj
+        )
+
         colors = {}
 
         for variant in variants:
-            if not variant.color:
+            color_name = (
+                str(
+                    variant.color or ""
+                ).strip()
+            )
+
+            if not color_name:
                 continue
 
-            color_name = variant.color.strip()
-            color_key = color_name.lower()
+            color_key = (
+                color_name.casefold()
+            )
 
             if color_key not in colors:
-                colors[color_key] = {
-                    "name": color_name,
-                    "code": (
-                        variant.color_code
-                        or "#111827"
-                    ),
-                    "has_stock": False,
+                colors[
+                    color_key
+                ] = {
+                    "name":
+                        color_name,
+
+                    "code":
+                        (
+                            str(
+                                variant.color_code
+                                or ""
+                            ).strip()
+                            or "#111827"
+                        ),
+
+                    "has_stock":
+                        False,
+
+                    "sizes":
+                        [],
                 }
 
-            if int(variant.stock or 0) > 0:
-                colors[color_key][
+            if (
+                int(
+                    variant.stock or 0
+                ) > 0
+            ):
+                colors[
+                    color_key
+                ][
                     "has_stock"
                 ] = True
 
-        return list(colors.values())
+                size = (
+                    str(
+                        variant.size or ""
+                    ).strip()
+                )
 
-    # -----------------------------------------------------
-    # Approved reviews
-    # -----------------------------------------------------
+                if (
+                    size
+                    and size
+                    not in colors[
+                        color_key
+                    ][
+                        "sizes"
+                    ]
+                ):
+                    colors[
+                        color_key
+                    ][
+                        "sizes"
+                    ].append(
+                        size
+                    )
+
+        result = list(
+            colors.values()
+        )
+
+        for color in result:
+            color[
+                "sizes"
+            ] = sorted(
+                color[
+                    "sizes"
+                ]
+            )
+
+        return result
+
+    # =====================================================
+    # Reviews
+    # =====================================================
 
     def get_approved_reviews(self, obj):
         prefetched_reviews = getattr(
             obj,
             "_prefetched_objects_cache",
             {},
-        ).get("reviews")
+        ).get(
+            "reviews"
+        )
 
         if prefetched_reviews is not None:
             return [
                 review
-                for review in prefetched_reviews
-                if review.status == "approved"
+                for review
+                in prefetched_reviews
+                if getattr(
+                    review,
+                    "status",
+                    None,
+                ) == "approved"
             ]
 
         return obj.reviews.filter(
@@ -306,35 +519,57 @@ class ProductBaseSerializer(serializers.ModelSerializer):
 
         if annotated_rating is not None:
             return round(
-                float(annotated_rating or 0),
+                float(
+                    annotated_rating or 0
+                ),
                 2,
             )
 
         approved_reviews = (
-            self.get_approved_reviews(obj)
+            self.get_approved_reviews(
+                obj
+            )
         )
 
-        if isinstance(approved_reviews, list):
+        if isinstance(
+            approved_reviews,
+            list,
+        ):
             if not approved_reviews:
                 return 0.0
 
-            total_rating = sum(
-                int(review.rating or 0)
-                for review in approved_reviews
-            )
+            ratings = [
+                float(
+                    review.rating or 0
+                )
+                for review
+                in approved_reviews
+            ]
 
             return round(
-                total_rating
-                / len(approved_reviews),
+                sum(
+                    ratings
+                )
+                / len(
+                    ratings
+                ),
                 2,
             )
 
-        average = approved_reviews.aggregate(
-            average_rating=Avg("rating"),
-        )["average_rating"]
+        average = (
+            approved_reviews.aggregate(
+                average_rating=Avg(
+                    "rating"
+                ),
+            )[
+                "average_rating"
+            ]
+        )
 
         return round(
-            float(average or 0),
+            float(
+                average or 0
+            ),
             2,
         )
 
@@ -346,22 +581,27 @@ class ProductBaseSerializer(serializers.ModelSerializer):
         )
 
         if annotated_total is not None:
-            return int(annotated_total or 0)
+            return int(
+                annotated_total or 0
+            )
 
         approved_reviews = (
-            self.get_approved_reviews(obj)
+            self.get_approved_reviews(
+                obj
+            )
         )
 
-        if isinstance(approved_reviews, list):
-            return len(approved_reviews)
+        if isinstance(
+            approved_reviews,
+            list,
+        ):
+            return len(
+                approved_reviews
+            )
 
         return approved_reviews.count()
 
     def get_rating_breakdown(self, obj):
-        approved_reviews = (
-            self.get_approved_reviews(obj)
-        )
-
         breakdown = {
             "5": 0,
             "4": 0,
@@ -370,41 +610,82 @@ class ProductBaseSerializer(serializers.ModelSerializer):
             "1": 0,
         }
 
-        if isinstance(approved_reviews, list):
+        approved_reviews = (
+            self.get_approved_reviews(
+                obj
+            )
+        )
+
+        if isinstance(
+            approved_reviews,
+            list,
+        ):
             for review in approved_reviews:
-                rating_key = str(
-                    int(review.rating or 0)
-                )
+                try:
+                    rating_key = str(
+                        int(
+                            review.rating
+                        )
+                    )
+                except (
+                    TypeError,
+                    ValueError,
+                ):
+                    continue
 
                 if rating_key in breakdown:
-                    breakdown[rating_key] += 1
+                    breakdown[
+                        rating_key
+                    ] += 1
 
             return breakdown
 
         rating_data = (
             approved_reviews
-            .values("rating")
-            .annotate(total=Count("id"))
+            .values(
+                "rating"
+            )
+            .annotate(
+                total=Count(
+                    "id"
+                )
+            )
         )
 
         for item in rating_data:
-            rating_key = str(
-                item["rating"]
-            )
+            try:
+                rating_key = str(
+                    int(
+                        item[
+                            "rating"
+                        ]
+                    )
+                )
+            except (
+                TypeError,
+                ValueError,
+            ):
+                continue
 
             if rating_key in breakdown:
-                breakdown[rating_key] = int(
-                    item["total"]
+                breakdown[
+                    rating_key
+                ] = int(
+                    item[
+                        "total"
+                    ]
+                    or 0
                 )
 
         return breakdown
 
 
 # =========================================================
-# Product List
+# Product List Serializer
 # =========================================================
 
 class ProductListSerializer(ProductBaseSerializer):
+
     class Meta:
         model = Product
 
@@ -436,9 +717,12 @@ class ProductListSerializer(ProductBaseSerializer):
             "main_image",
             "main_image_url",
 
+            "discount_amount",
             "discount_percentage",
+
             "total_stock",
             "is_in_stock",
+
             "available_sizes",
             "available_colors",
 
@@ -458,140 +742,231 @@ class ProductListSerializer(ProductBaseSerializer):
             "updated_at",
         )
 
+        read_only_fields = (
+            "id",
+            "created_at",
+            "updated_at",
+        )
+
 
 # =========================================================
-# Product Detail
+# Product Detail Serializer
 # =========================================================
 
 class ProductDetailSerializer(ProductBaseSerializer):
+
     images = ProductImageSerializer(
         many=True,
         read_only=True,
     )
 
-    variants = ProductVariantSerializer(
-        many=True,
-        read_only=True,
-    )
+    variants = serializers.SerializerMethodField()
 
     latest_reviews = serializers.SerializerMethodField()
 
+    # =====================================================
+    # Active Variants
+    # =====================================================
+
+    def get_variants(self, obj):
+        variants = self.get_active_variants(
+            obj
+        )
+
+        return ProductVariantSerializer(
+            variants,
+            many=True,
+            context=self.context,
+        ).data
+
+    # =====================================================
+    # Review User
+    # =====================================================
+
     def get_review_user_name(self, review):
-        user = review.user
+        user = getattr(
+            review,
+            "user",
+            None,
+        )
 
         if user is None:
             return "Customer"
 
-        full_name = ""
-
-        if hasattr(user, "get_full_name"):
+        if hasattr(
+            user,
+            "get_full_name",
+        ):
             full_name = (
-                user.get_full_name().strip()
+                user
+                .get_full_name()
+                .strip()
             )
 
-        if full_name:
-            return full_name
+            if full_name:
+                return full_name
 
-        username = getattr(
-            user,
-            "username",
-            "",
-        )
+        username = (
+            getattr(
+                user,
+                "username",
+                "",
+            )
+            or ""
+        ).strip()
 
         if username:
             return username
 
-        email = getattr(
-            user,
-            "email",
-            "",
-        )
+        email = (
+            getattr(
+                user,
+                "email",
+                "",
+            )
+            or ""
+        ).strip()
 
         if email:
-            return email.split("@")[0]
-
-        phone = getattr(
-            user,
-            "phone",
-            "",
-        )
-
-        return phone or "Customer"
-
-    def get_review_image_url(self, review):
-        if not review.image:
-            return None
-
-        request = self.context.get("request")
-
-        try:
-            image_url = review.image.url
-        except ValueError:
-            return None
-
-        if request:
-            return request.build_absolute_uri(
-                image_url
+            return (
+                email.split(
+                    "@",
+                    1,
+                )[0]
+                or "Customer"
             )
 
-        return image_url
+        mobile = (
+            getattr(
+                user,
+                "mobile",
+                "",
+            )
+            or getattr(
+                user,
+                "phone",
+                "",
+            )
+            or ""
+        )
+
+        return (
+            str(
+                mobile
+            ).strip()
+            or "Customer"
+        )
+
+    # =====================================================
+    # Review Image
+    # =====================================================
+
+    def get_review_image_url(self, review):
+        return build_file_url(
+            self,
+            getattr(
+                review,
+                "image",
+                None,
+            ),
+        )
+
+    # =====================================================
+    # Latest Reviews
+    # =====================================================
 
     def get_latest_reviews(self, obj):
         prefetched_reviews = getattr(
             obj,
             "_prefetched_objects_cache",
             {},
-        ).get("reviews")
+        ).get(
+            "reviews"
+        )
 
         if prefetched_reviews is not None:
             approved_reviews = [
                 review
-                for review in prefetched_reviews
-                if review.status == "approved"
+                for review
+                in prefetched_reviews
+                if getattr(
+                    review,
+                    "status",
+                    None,
+                ) == "approved"
             ]
 
             approved_reviews.sort(
-                key=lambda review: review.created_at,
+                key=lambda review: (
+                    review.created_at
+                ),
                 reverse=True,
             )
 
-            reviews = approved_reviews[:5]
+            reviews = (
+                approved_reviews[:5]
+            )
 
         else:
             reviews = (
-                obj.reviews.filter(
+                obj.reviews
+                .filter(
                     status="approved",
                 )
                 .select_related(
                     "user",
                     "order_item",
                 )
-                .order_by("-created_at")[:5]
+                .order_by(
+                    "-created_at"
+                )[:5]
             )
 
         return [
             {
-                "id": review.id,
-                "rating": review.rating,
-                "title": review.title,
-                "comment": review.comment,
-                "user_name": (
+                "id":
+                    review.id,
+
+                "rating":
+                    review.rating,
+
+                "title":
+                    review.title,
+
+                "comment":
+                    review.comment,
+
+                "user_name":
                     self.get_review_user_name(
                         review
-                    )
-                ),
-                "image_url": (
+                    ),
+
+                "image_url":
                     self.get_review_image_url(
                         review
-                    )
-                ),
-                "is_verified_purchase": (
-                    review.is_verified_purchase
-                ),
-                "helpful_count": (
-                    review.helpful_count
-                ),
-                "created_at": review.created_at,
+                    ),
+
+                "is_verified_purchase":
+                    bool(
+                        getattr(
+                            review,
+                            "is_verified_purchase",
+                            False,
+                        )
+                    ),
+
+                "helpful_count":
+                    int(
+                        getattr(
+                            review,
+                            "helpful_count",
+                            0,
+                        )
+                        or 0
+                    ),
+
+                "created_at":
+                    review.created_at,
             }
             for review in reviews
         ]
@@ -627,12 +1002,16 @@ class ProductDetailSerializer(ProductBaseSerializer):
 
             "main_image",
             "main_image_url",
+
             "images",
             "variants",
 
+            "discount_amount",
             "discount_percentage",
+
             "total_stock",
             "is_in_stock",
+
             "available_sizes",
             "available_colors",
 
@@ -649,6 +1028,15 @@ class ProductDetailSerializer(ProductBaseSerializer):
             "is_clearance_sale",
             "is_offer",
 
+            "meta_title",
+            "meta_description",
+
+            "created_at",
+            "updated_at",
+        )
+
+        read_only_fields = (
+            "id",
             "created_at",
             "updated_at",
         )
@@ -658,5 +1046,11 @@ class ProductDetailSerializer(ProductBaseSerializer):
 # Backward Compatibility
 # =========================================================
 
-class ProductSerializer(ProductDetailSerializer):
+class ProductSerializer(
+    ProductDetailSerializer
+):
+    """
+    Maintains compatibility with older imports in the project.
+    """
+
     pass
