@@ -321,8 +321,7 @@ class ProductBaseSerializer(
             if (
                 obj.old_price is None
                 or obj.price is None
-                or obj.old_price
-                <= obj.price
+                or obj.old_price <= obj.price
             ):
                 return "0.00"
 
@@ -389,8 +388,7 @@ class ProductBaseSerializer(
 
             if (
                 old_price <= 0
-                or old_price
-                <= price
+                or old_price <= price
             ):
                 return 0
 
@@ -1273,6 +1271,29 @@ class ProductVariantWriteSerializer(
         required=False,
     )
 
+    # -----------------------------------------------------
+    # IMPORTANT:
+    #
+    # DRF's automatic UniqueValidator is disabled here.
+    #
+    # Nested PATCH/PUT requests may send an existing
+    # variant with its existing SKU. Without validators=[],
+    # DRF incorrectly treats the existing SKU as a new
+    # duplicate before our update() method gets the
+    # existing variant instance.
+    #
+    # Actual uniqueness is still protected by:
+    #   - model.full_clean()
+    #   - database unique constraint
+    # -----------------------------------------------------
+
+    sku = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        validators=[],
+    )
+
     class Meta:
         model = ProductVariant
 
@@ -1291,11 +1312,8 @@ class ProductVariantWriteSerializer(
         value,
     ):
         if value < 0:
-            raise (
-                serializers
-                .ValidationError(
-                    "Stock cannot be negative."
-                )
+            raise serializers.ValidationError(
+                "Stock cannot be negative."
             )
 
         return value
@@ -1351,11 +1369,8 @@ class ProductVariantAdminSerializer(
         value,
     ):
         if value < 0:
-            raise (
-                serializers
-                .ValidationError(
-                    "Stock cannot be negative."
-                )
+            raise serializers.ValidationError(
+                "Stock cannot be negative."
             )
 
         return value
@@ -1522,18 +1537,15 @@ class ProductAdminWriteSerializer(
             and category.department_id
             != department.id
         ):
-            raise (
-                serializers
-                .ValidationError(
-                    {
-                        "category":
-                            (
-                                "Selected category "
-                                "does not belong "
-                                "to this department."
-                            )
-                    }
-                )
+            raise serializers.ValidationError(
+                {
+                    "category":
+                        (
+                            "Selected category "
+                            "does not belong "
+                            "to this department."
+                        )
+                }
             )
 
         # -------------------------------------------------
@@ -1546,18 +1558,15 @@ class ProductAdminWriteSerializer(
             and subcategory.category_id
             != category.id
         ):
-            raise (
-                serializers
-                .ValidationError(
-                    {
-                        "subcategory":
-                            (
-                                "Selected subcategory "
-                                "does not belong "
-                                "to this category."
-                            )
-                    }
-                )
+            raise serializers.ValidationError(
+                {
+                    "subcategory":
+                        (
+                            "Selected subcategory "
+                            "does not belong "
+                            "to this category."
+                        )
+                }
             )
 
         # -------------------------------------------------
@@ -1568,34 +1577,28 @@ class ProductAdminWriteSerializer(
             price is not None
             and price < 0
         ):
-            raise (
-                serializers
-                .ValidationError(
-                    {
-                        "price":
-                            (
-                                "Price cannot "
-                                "be negative."
-                            )
-                    }
-                )
+            raise serializers.ValidationError(
+                {
+                    "price":
+                        (
+                            "Price cannot "
+                            "be negative."
+                        )
+                }
             )
 
         if (
             old_price is not None
             and old_price < 0
         ):
-            raise (
-                serializers
-                .ValidationError(
-                    {
-                        "old_price":
-                            (
-                                "Old price cannot "
-                                "be negative."
-                            )
-                    }
-                )
+            raise serializers.ValidationError(
+                {
+                    "old_price":
+                        (
+                            "Old price cannot "
+                            "be negative."
+                        )
+                }
             )
 
         if (
@@ -1603,18 +1606,15 @@ class ProductAdminWriteSerializer(
             and price is not None
             and old_price < price
         ):
-            raise (
-                serializers
-                .ValidationError(
-                    {
-                        "old_price":
-                            (
-                                "Old price cannot "
-                                "be lower than "
-                                "selling price."
-                            )
-                    }
-                )
+            raise serializers.ValidationError(
+                {
+                    "old_price":
+                        (
+                            "Old price cannot "
+                            "be lower than "
+                            "selling price."
+                        )
+                }
             )
 
         return attrs
@@ -1679,6 +1679,10 @@ class ProductAdminWriteSerializer(
             )
         )
 
+        # -------------------------------------------------
+        # Update Product
+        # -------------------------------------------------
+
         for (
             field,
             value,
@@ -1693,6 +1697,10 @@ class ProductAdminWriteSerializer(
 
         instance.full_clean()
         instance.save()
+
+        # -------------------------------------------------
+        # Update / Create Nested Variants
+        # -------------------------------------------------
 
         if (
             variants_data
@@ -1716,6 +1724,10 @@ class ProductAdminWriteSerializer(
                         None,
                     )
                 )
+
+                # -----------------------------------------
+                # Existing Variant Update
+                # -----------------------------------------
 
                 if (
                     variant_id
@@ -1743,6 +1755,10 @@ class ProductAdminWriteSerializer(
                     variant.full_clean()
                     variant.save()
 
+                # -----------------------------------------
+                # New Variant
+                # -----------------------------------------
+
                 else:
                     variant = (
                         ProductVariant(
@@ -1753,6 +1769,11 @@ class ProductAdminWriteSerializer(
 
                     variant.full_clean()
                     variant.save()
+
+        # Important:
+        # Existing variants omitted from the request are
+        # intentionally NOT deleted. Variant deletion is
+        # handled through the standalone admin variant API.
 
         return instance
 
