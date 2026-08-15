@@ -1,7 +1,6 @@
 from django.db import transaction
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Sum
 from django.db.models.functions import Coalesce
-from django.shortcuts import get_object_or_404
 
 from rest_framework import filters, generics, permissions, status
 from rest_framework.response import Response
@@ -9,7 +8,11 @@ from rest_framework.views import APIView
 
 from products.models import Product, ProductVariant
 
-from .models import InventorySettings, InventoryTransaction, LowStockAlert
+from .models import (
+    InventorySettings,
+    InventoryTransaction,
+    LowStockAlert,
+)
 from .serializers import (
     InventorySerializer,
     InventorySettingsSerializer,
@@ -20,73 +23,167 @@ from .serializers import (
 )
 
 
+# =========================================================
+# Permissions
+# =========================================================
+
 class IsAdminOrStaff(permissions.BasePermission):
-    """Allow access only to authenticated staff or superusers."""
+    """
+    Allow access only to authenticated staff or superusers.
+    """
 
     message = "Admin or staff access is required."
 
     def has_permission(self, request, view):
         user = request.user
+
         return bool(
             user
             and user.is_authenticated
-            and (user.is_staff or user.is_superuser)
+            and (
+                user.is_staff
+                or user.is_superuser
+            )
         )
 
+
+# =========================================================
+# Shared Inventory Queryset
+# =========================================================
 
 class InventoryQuerysetMixin:
-    """Shared ProductVariant queryset and serializer context."""
+    """
+    Shared ProductVariant queryset and serializer context.
+    """
 
     def get_queryset(self):
-        queryset = ProductVariant.objects.select_related(
-            "product",
-            "product__brand",
-            "product__category",
+        queryset = (
+            ProductVariant.objects
+            .select_related(
+                "product",
+                "product__brand",
+                "product__category",
+            )
         )
 
-        is_active = self.request.query_params.get("is_active")
-        product_id = self.request.query_params.get("product")
-        brand_id = self.request.query_params.get("brand")
-        category_id = self.request.query_params.get("category")
-        stock_status = self.request.query_params.get("stock_status")
+        is_active = self.request.query_params.get(
+            "is_active"
+        )
+
+        product_id = self.request.query_params.get(
+            "product"
+        )
+
+        brand_id = self.request.query_params.get(
+            "brand"
+        )
+
+        category_id = self.request.query_params.get(
+            "category"
+        )
+
+        stock_status = self.request.query_params.get(
+            "stock_status"
+        )
+
+        # -------------------------------------------------
+        # Active / inactive filter
+        # -------------------------------------------------
 
         if is_active is not None:
-            normalized = str(is_active).strip().lower()
-            if normalized in {"true", "1", "yes"}:
-                queryset = queryset.filter(is_active=True)
-            elif normalized in {"false", "0", "no"}:
-                queryset = queryset.filter(is_active=False)
+            normalized = (
+                str(is_active)
+                .strip()
+                .lower()
+            )
+
+            if normalized in {
+                "true",
+                "1",
+                "yes",
+            }:
+                queryset = queryset.filter(
+                    is_active=True
+                )
+
+            elif normalized in {
+                "false",
+                "0",
+                "no",
+            }:
+                queryset = queryset.filter(
+                    is_active=False
+                )
+
+        # -------------------------------------------------
+        # Product / brand / category filters
+        # -------------------------------------------------
 
         if product_id:
-            queryset = queryset.filter(product_id=product_id)
+            queryset = queryset.filter(
+                product_id=product_id
+            )
 
         if brand_id:
-            queryset = queryset.filter(product__brand_id=brand_id)
+            queryset = queryset.filter(
+                product__brand_id=brand_id
+            )
 
         if category_id:
-            queryset = queryset.filter(product__category_id=category_id)
+            queryset = queryset.filter(
+                product__category_id=category_id
+            )
+
+        # -------------------------------------------------
+        # Stock status filter
+        # -------------------------------------------------
 
         settings_obj = InventorySettings.load()
-        threshold = settings_obj.low_stock_threshold
+
+        threshold = (
+            settings_obj.low_stock_threshold
+        )
 
         if stock_status == "in_stock":
-            queryset = queryset.filter(stock__gt=0)
+            queryset = queryset.filter(
+                stock__gt=0
+            )
+
         elif stock_status == "low_stock":
-            queryset = queryset.filter(stock__gt=0, stock__lte=threshold)
+            queryset = queryset.filter(
+                stock__gt=0,
+                stock__lte=threshold,
+            )
+
         elif stock_status == "out_of_stock":
-            queryset = queryset.filter(stock=0)
+            queryset = queryset.filter(
+                stock=0
+            )
 
         return queryset
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
-        context["low_stock_threshold"] = (
-            InventorySettings.load().low_stock_threshold
+
+        context[
+            "low_stock_threshold"
+        ] = (
+            InventorySettings
+            .load()
+            .low_stock_threshold
         )
+
         return context
 
 
-class InventoryListView(InventoryQuerysetMixin, generics.ListAPIView):
+# =========================================================
+# Inventory List
+# =========================================================
+
+class InventoryListView(
+    InventoryQuerysetMixin,
+    generics.ListAPIView,
+):
     """
     GET /api/inventory/
 
@@ -94,11 +191,16 @@ class InventoryListView(InventoryQuerysetMixin, generics.ListAPIView):
     """
 
     serializer_class = InventorySerializer
-    permission_classes = (IsAdminOrStaff,)
+
+    permission_classes = (
+        IsAdminOrStaff,
+    )
+
     filter_backends = (
         filters.SearchFilter,
         filters.OrderingFilter,
     )
+
     search_fields = (
         "product__name",
         "product__sku",
@@ -106,16 +208,28 @@ class InventoryListView(InventoryQuerysetMixin, generics.ListAPIView):
         "color",
         "size",
     )
+
     ordering_fields = (
         "stock",
         "product__name",
         "sku",
         "id",
     )
-    ordering = ("product__name", "id")
+
+    ordering = (
+        "product__name",
+        "id",
+    )
 
 
-class InventoryDetailView(InventoryQuerysetMixin, generics.RetrieveAPIView):
+# =========================================================
+# Inventory Detail
+# =========================================================
+
+class InventoryDetailView(
+    InventoryQuerysetMixin,
+    generics.RetrieveAPIView,
+):
     """
     GET /api/inventory/<variant_id>/
 
@@ -123,24 +237,40 @@ class InventoryDetailView(InventoryQuerysetMixin, generics.RetrieveAPIView):
     """
 
     serializer_class = InventorySerializer
-    permission_classes = (IsAdminOrStaff,)
+
+    permission_classes = (
+        IsAdminOrStaff,
+    )
+
     lookup_url_kwarg = "variant_id"
 
 
-class LowStockInventoryListView(InventoryQuerysetMixin, generics.ListAPIView):
+# =========================================================
+# Low Stock Inventory
+# =========================================================
+
+class LowStockInventoryListView(
+    InventoryQuerysetMixin,
+    generics.ListAPIView,
+):
     """
     GET /api/inventory/low-stock/
 
-    List active variants whose stock is above zero but at or below the
-    configured low-stock threshold.
+    List active variants whose stock is above zero
+    but at or below the configured low-stock threshold.
     """
 
     serializer_class = InventorySerializer
-    permission_classes = (IsAdminOrStaff,)
+
+    permission_classes = (
+        IsAdminOrStaff,
+    )
+
     filter_backends = (
         filters.SearchFilter,
         filters.OrderingFilter,
     )
+
     search_fields = (
         "product__name",
         "product__sku",
@@ -148,11 +278,25 @@ class LowStockInventoryListView(InventoryQuerysetMixin, generics.ListAPIView):
         "color",
         "size",
     )
-    ordering_fields = ("stock", "product__name", "sku")
-    ordering = ("stock", "product__name")
+
+    ordering_fields = (
+        "stock",
+        "product__name",
+        "sku",
+    )
+
+    ordering = (
+        "stock",
+        "product__name",
+    )
 
     def get_queryset(self):
-        threshold = InventorySettings.load().low_stock_threshold
+        threshold = (
+            InventorySettings
+            .load()
+            .low_stock_threshold
+        )
+
         return (
             super()
             .get_queryset()
@@ -164,6 +308,10 @@ class LowStockInventoryListView(InventoryQuerysetMixin, generics.ListAPIView):
             )
         )
 
+
+# =========================================================
+# Out Of Stock Inventory
+# =========================================================
 
 class OutOfStockInventoryListView(
     InventoryQuerysetMixin,
@@ -176,11 +324,16 @@ class OutOfStockInventoryListView(
     """
 
     serializer_class = InventorySerializer
-    permission_classes = (IsAdminOrStaff,)
+
+    permission_classes = (
+        IsAdminOrStaff,
+    )
+
     filter_backends = (
         filters.SearchFilter,
         filters.OrderingFilter,
     )
+
     search_fields = (
         "product__name",
         "product__sku",
@@ -188,8 +341,17 @@ class OutOfStockInventoryListView(
         "color",
         "size",
     )
-    ordering_fields = ("product__name", "sku", "id")
-    ordering = ("product__name", "id")
+
+    ordering_fields = (
+        "product__name",
+        "sku",
+        "id",
+    )
+
+    ordering = (
+        "product__name",
+        "id",
+    )
 
     def get_queryset(self):
         return (
@@ -203,6 +365,10 @@ class OutOfStockInventoryListView(
         )
 
 
+# =========================================================
+# Inventory Summary
+# =========================================================
+
 class InventorySummaryView(APIView):
     """
     GET /api/inventory/summary/
@@ -210,54 +376,108 @@ class InventorySummaryView(APIView):
     Return inventory dashboard totals.
     """
 
-    permission_classes = (IsAdminOrStaff,)
+    permission_classes = (
+        IsAdminOrStaff,
+    )
 
     def get(self, request):
         settings_obj = InventorySettings.load()
-        threshold = settings_obj.low_stock_threshold
 
-        active_variants = ProductVariant.objects.filter(
-            is_active=True,
-            product__is_active=True,
+        threshold = (
+            settings_obj.low_stock_threshold
+        )
+
+        active_variants = (
+            ProductVariant.objects
+            .filter(
+                is_active=True,
+                product__is_active=True,
+            )
         )
 
         totals = active_variants.aggregate(
-            active_variants=Count("id"),
-            total_stock=Coalesce(Sum("stock"), 0),
+            active_variants=Count(
+                "id"
+            ),
+            total_stock=Coalesce(
+                Sum(
+                    "stock"
+                ),
+                0,
+            ),
         )
 
         data = {
-            "total_products": Product.objects.count(),
-            "total_variants": ProductVariant.objects.count(),
-            "active_variants": totals["active_variants"],
-            "total_stock": totals["total_stock"],
-            "low_stock_variants": active_variants.filter(
-                stock__gt=0,
-                stock__lte=threshold,
-            ).count(),
-            "out_of_stock_variants": active_variants.filter(
-                stock=0,
-            ).count(),
-            "low_stock_threshold": threshold,
+            "total_products":
+                Product.objects.count(),
+
+            "total_variants":
+                ProductVariant.objects.count(),
+
+            "active_variants":
+                totals[
+                    "active_variants"
+                ],
+
+            "total_stock":
+                totals[
+                    "total_stock"
+                ],
+
+            "low_stock_variants":
+                active_variants
+                .filter(
+                    stock__gt=0,
+                    stock__lte=threshold,
+                )
+                .count(),
+
+            "out_of_stock_variants":
+                active_variants
+                .filter(
+                    stock=0,
+                )
+                .count(),
+
+            "low_stock_threshold":
+                threshold,
         }
 
-        serializer = InventorySummarySerializer(data)
-        return Response(serializer.data)
+        serializer = InventorySummarySerializer(
+            data
+        )
+
+        return Response(
+            serializer.data
+        )
 
 
-class InventoryTransactionListView(generics.ListAPIView):
+# =========================================================
+# Inventory Transaction History
+# =========================================================
+
+class InventoryTransactionListView(
+    generics.ListAPIView
+):
     """
     GET /api/inventory/transactions/
 
     List inventory movement history.
     """
 
-    serializer_class = InventoryTransactionSerializer
-    permission_classes = (IsAdminOrStaff,)
+    serializer_class = (
+        InventoryTransactionSerializer
+    )
+
+    permission_classes = (
+        IsAdminOrStaff,
+    )
+
     filter_backends = (
         filters.SearchFilter,
         filters.OrderingFilter,
     )
+
     search_fields = (
         "product__name",
         "product__sku",
@@ -265,157 +485,423 @@ class InventoryTransactionListView(generics.ListAPIView):
         "reference",
         "note",
     )
+
     ordering_fields = (
         "created_at",
         "quantity_change",
         "stock_before",
         "stock_after",
     )
-    ordering = ("-created_at",)
+
+    ordering = (
+        "-created_at",
+    )
 
     def get_queryset(self):
-        queryset = InventoryTransaction.objects.select_related(
-            "variant",
-            "product",
-            "order",
-            "order_item",
-            "created_by",
+        queryset = (
+            InventoryTransaction.objects
+            .select_related(
+                "variant",
+                "product",
+                "order",
+                "order_item",
+                "created_by",
+            )
         )
 
-        variant_id = self.request.query_params.get("variant")
-        product_id = self.request.query_params.get("product")
-        order_id = self.request.query_params.get("order")
-        transaction_type = self.request.query_params.get(
-            "transaction_type"
+        variant_id = (
+            self.request.query_params.get(
+                "variant"
+            )
         )
-        stock_direction = self.request.query_params.get("direction")
+
+        product_id = (
+            self.request.query_params.get(
+                "product"
+            )
+        )
+
+        order_id = (
+            self.request.query_params.get(
+                "order"
+            )
+        )
+
+        transaction_type = (
+            self.request.query_params.get(
+                "transaction_type"
+            )
+        )
+
+        stock_direction = (
+            self.request.query_params.get(
+                "direction"
+            )
+        )
 
         if variant_id:
-            queryset = queryset.filter(variant_id=variant_id)
+            queryset = queryset.filter(
+                variant_id=variant_id
+            )
 
         if product_id:
-            queryset = queryset.filter(product_id=product_id)
+            queryset = queryset.filter(
+                product_id=product_id
+            )
 
         if order_id:
-            queryset = queryset.filter(order_id=order_id)
+            queryset = queryset.filter(
+                order_id=order_id
+            )
 
         if transaction_type:
-            queryset = queryset.filter(transaction_type=transaction_type)
+            queryset = queryset.filter(
+                transaction_type=(
+                    transaction_type
+                )
+            )
 
         if stock_direction == "in":
-            queryset = queryset.filter(quantity_change__gt=0)
+            queryset = queryset.filter(
+                quantity_change__gt=0
+            )
+
         elif stock_direction == "out":
-            queryset = queryset.filter(quantity_change__lt=0)
+            queryset = queryset.filter(
+                quantity_change__lt=0
+            )
 
         return queryset
 
+
+# =========================================================
+# Stock Adjustment
+# =========================================================
 
 class StockAdjustmentView(APIView):
     """
     POST /api/inventory/adjust/
 
-    Add, remove, or set stock for a product variant and record the movement.
+    Add, remove, or set stock for a product variant
+    and record the inventory movement.
     """
 
-    permission_classes = (IsAdminOrStaff,)
+    permission_classes = (
+        IsAdminOrStaff,
+    )
 
     @transaction.atomic
     def post(self, request):
         serializer = StockAdjustmentSerializer(
             data=request.data,
-            context={"request": request},
+            context={
+                "request": request,
+            },
         )
-        serializer.is_valid(raise_exception=True)
 
-        change = serializer.get_stock_change()
-        variant = ProductVariant.objects.select_for_update().select_related(
-            "product"
-        ).get(pk=change["variant"].pk)
+        serializer.is_valid(
+            raise_exception=True
+        )
 
-        # Recalculate after locking so concurrent adjustments cannot overwrite
-        # one another.
-        current_stock = max(0, int(variant.stock or 0))
-        adjustment_type = serializer.validated_data["adjustment_type"]
-        quantity = serializer.validated_data["quantity"]
+        change = (
+            serializer.get_stock_change()
+        )
+
+        # -------------------------------------------------
+        # Lock variant row
+        # -------------------------------------------------
+
+        variant = (
+            ProductVariant.objects
+            .select_for_update()
+            .select_related(
+                "product"
+            )
+            .get(
+                pk=change[
+                    "variant"
+                ].pk
+            )
+        )
+
+        # -------------------------------------------------
+        # Recalculate stock after locking
+        # -------------------------------------------------
+
+        current_stock = max(
+            0,
+            int(
+                variant.stock
+                or 0
+            ),
+        )
+
+        adjustment_type = (
+            serializer.validated_data[
+                "adjustment_type"
+            ]
+        )
+
+        quantity = (
+            serializer.validated_data[
+                "quantity"
+            ]
+        )
 
         if adjustment_type == "add":
             quantity_change = quantity
+
         elif adjustment_type == "remove":
             quantity_change = -quantity
+
         else:
-            quantity_change = quantity - current_stock
+            quantity_change = (
+                quantity
+                - current_stock
+            )
 
-        settings_obj = InventorySettings.load()
-        new_stock = current_stock + quantity_change
+        settings_obj = (
+            InventorySettings.load()
+        )
 
-        if new_stock < 0 and not settings_obj.allow_negative_stock:
+        new_stock = (
+            current_stock
+            + quantity_change
+        )
+
+        # -------------------------------------------------
+        # Negative stock protection
+        # -------------------------------------------------
+
+        if (
+            new_stock < 0
+            and not (
+                settings_obj
+                .allow_negative_stock
+            )
+        ):
             return Response(
                 {
                     "quantity": [
-                        "This adjustment would make stock negative."
+                        (
+                            "This adjustment would "
+                            "make stock negative."
+                        )
                     ]
                 },
-                status=status.HTTP_400_BAD_REQUEST,
+                status=(
+                    status
+                    .HTTP_400_BAD_REQUEST
+                ),
             )
+
+        # -------------------------------------------------
+        # No-op adjustment protection
+        # -------------------------------------------------
 
         if quantity_change == 0:
             return Response(
                 {
                     "quantity": [
-                        "The requested stock value is already set."
+                        (
+                            "The requested stock "
+                            "value is already set."
+                        )
                     ]
                 },
-                status=status.HTTP_400_BAD_REQUEST,
+                status=(
+                    status
+                    .HTTP_400_BAD_REQUEST
+                ),
             )
 
-        variant.stock = new_stock
-        variant.save(update_fields=["stock"])
+        # -------------------------------------------------
+        # Reference normalization
+        # -------------------------------------------------
 
-        inventory_transaction = InventoryTransaction.objects.create(
-            variant=variant,
-            product=variant.product,
-            transaction_type=serializer.validated_data[
-                "transaction_type"
-            ],
-            quantity_change=quantity_change,
-            stock_before=current_stock,
-            reference=serializer.validated_data.get("reference", ""),
-            note=serializer.validated_data.get("note", ""),
-            metadata=serializer.validated_data.get("metadata", {}),
-            created_by=request.user,
+        reference = (
+            serializer.validated_data
+            .get(
+                "reference",
+                "",
+            )
+            .strip()
         )
+
+        transaction_type = (
+            serializer.validated_data[
+                "transaction_type"
+            ]
+        )
+
+        # -------------------------------------------------
+        # Duplicate / idempotency protection
+        # -------------------------------------------------
+
+        if reference:
+            duplicate_exists = (
+                InventoryTransaction.objects
+                .filter(
+                    variant=variant,
+                    reference=reference,
+                    transaction_type=(
+                        transaction_type
+                    ),
+                )
+                .exists()
+            )
+
+            if duplicate_exists:
+                return Response(
+                    {
+                        "reference": [
+                            (
+                                "An inventory transaction "
+                                "with this reference has "
+                                "already been processed "
+                                "for this variant."
+                            )
+                        ]
+                    },
+                    status=(
+                        status
+                        .HTTP_400_BAD_REQUEST
+                    ),
+                )
+
+        # -------------------------------------------------
+        # Update stock
+        # -------------------------------------------------
+
+        variant.stock = new_stock
+
+        variant.save(
+            update_fields=[
+                "stock",
+            ]
+        )
+
+        # -------------------------------------------------
+        # Create audit transaction
+        # -------------------------------------------------
+
+        inventory_transaction = (
+            InventoryTransaction.objects
+            .create(
+                variant=variant,
+                product=variant.product,
+                transaction_type=(
+                    transaction_type
+                ),
+                quantity_change=(
+                    quantity_change
+                ),
+                stock_before=(
+                    current_stock
+                ),
+                reference=reference,
+                note=(
+                    serializer
+                    .validated_data
+                    .get(
+                        "note",
+                        "",
+                    )
+                ),
+                metadata=(
+                    serializer
+                    .validated_data
+                    .get(
+                        "metadata",
+                        {},
+                    )
+                ),
+                created_by=request.user,
+            )
+        )
+
+        # -------------------------------------------------
+        # Sync low-stock alert
+        # -------------------------------------------------
 
         self._sync_low_stock_alert(
             variant=variant,
-            threshold=settings_obj.low_stock_threshold,
+            threshold=(
+                settings_obj
+                .low_stock_threshold
+            ),
         )
+
+        # -------------------------------------------------
+        # Response
+        # -------------------------------------------------
 
         return Response(
             {
-                "message": "Stock updated successfully.",
-                "inventory": InventorySerializer(
-                    variant,
-                    context={
-                        "request": request,
-                        "low_stock_threshold": (
-                            settings_obj.low_stock_threshold
-                        ),
-                    },
-                ).data,
-                "transaction": InventoryTransactionSerializer(
-                    inventory_transaction,
-                    context={"request": request},
-                ).data,
+                "message":
+                    "Stock updated successfully.",
+
+                "inventory":
+                    InventorySerializer(
+                        variant,
+                        context={
+                            "request":
+                                request,
+
+                            "low_stock_threshold":
+                                (
+                                    settings_obj
+                                    .low_stock_threshold
+                                ),
+                        },
+                    ).data,
+
+                "transaction":
+                    InventoryTransactionSerializer(
+                        inventory_transaction,
+                        context={
+                            "request":
+                                request,
+                        },
+                    ).data,
             },
             status=status.HTTP_200_OK,
         )
 
-    @staticmethod
-    def _sync_low_stock_alert(*, variant, threshold):
-        current_stock = max(0, int(variant.stock or 0))
-        should_alert = current_stock <= threshold
+    # =====================================================
+    # Low Stock Alert Sync
+    # =====================================================
 
-        alert = LowStockAlert.objects.filter(variant=variant).first()
+    @staticmethod
+    def _sync_low_stock_alert(
+        *,
+        variant,
+        threshold,
+    ):
+        current_stock = max(
+            0,
+            int(
+                variant.stock
+                or 0
+            ),
+        )
+
+        should_alert = (
+            current_stock
+            <= threshold
+        )
+
+        alert = (
+            LowStockAlert.objects
+            .filter(
+                variant=variant
+            )
+            .first()
+        )
+
+        # -------------------------------------------------
+        # Create or reopen alert
+        # -------------------------------------------------
 
         if should_alert:
             if alert is None:
@@ -425,12 +911,20 @@ class StockAdjustmentView(APIView):
                     threshold=threshold,
                     is_active=True,
                 )
+
                 return
 
-            alert.current_stock = current_stock
-            alert.threshold = threshold
+            alert.current_stock = (
+                current_stock
+            )
+
+            alert.threshold = (
+                threshold
+            )
+
             alert.is_active = True
             alert.resolved_at = None
+
             alert.save(
                 update_fields=(
                     "current_stock",
@@ -440,11 +934,22 @@ class StockAdjustmentView(APIView):
                     "updated_at",
                 )
             )
+
             return
 
+        # -------------------------------------------------
+        # Resolve existing alert
+        # -------------------------------------------------
+
         if alert is not None:
-            alert.current_stock = current_stock
-            alert.threshold = threshold
+            alert.current_stock = (
+                current_stock
+            )
+
+            alert.threshold = (
+                threshold
+            )
+
             alert.save(
                 update_fields=(
                     "current_stock",
@@ -452,53 +957,101 @@ class StockAdjustmentView(APIView):
                     "updated_at",
                 )
             )
+
             if alert.is_active:
                 alert.resolve()
 
 
-class LowStockAlertListView(generics.ListAPIView):
+# =========================================================
+# Low Stock Alert List
+# =========================================================
+
+class LowStockAlertListView(
+    generics.ListAPIView
+):
     """
     GET /api/inventory/alerts/
 
     List stored low-stock alerts.
     """
 
-    serializer_class = LowStockAlertSerializer
-    permission_classes = (IsAdminOrStaff,)
+    serializer_class = (
+        LowStockAlertSerializer
+    )
+
+    permission_classes = (
+        IsAdminOrStaff,
+    )
+
     filter_backends = (
         filters.SearchFilter,
         filters.OrderingFilter,
     )
+
     search_fields = (
         "variant__product__name",
         "variant__product__sku",
         "variant__sku",
     )
+
     ordering_fields = (
         "current_stock",
         "threshold",
         "created_at",
         "updated_at",
     )
-    ordering = ("current_stock", "-updated_at")
+
+    ordering = (
+        "current_stock",
+        "-updated_at",
+    )
 
     def get_queryset(self):
-        queryset = LowStockAlert.objects.select_related(
-            "variant",
-            "variant__product",
+        queryset = (
+            LowStockAlert.objects
+            .select_related(
+                "variant",
+                "variant__product",
+            )
         )
 
-        is_active = self.request.query_params.get("is_active")
+        is_active = (
+            self.request.query_params.get(
+                "is_active"
+            )
+        )
 
         if is_active is not None:
-            normalized = str(is_active).strip().lower()
-            if normalized in {"true", "1", "yes"}:
-                queryset = queryset.filter(is_active=True)
-            elif normalized in {"false", "0", "no"}:
-                queryset = queryset.filter(is_active=False)
+            normalized = (
+                str(is_active)
+                .strip()
+                .lower()
+            )
+
+            if normalized in {
+                "true",
+                "1",
+                "yes",
+            }:
+                queryset = queryset.filter(
+                    is_active=True
+                )
+
+            elif normalized in {
+                "false",
+                "0",
+                "no",
+            }:
+                queryset = queryset.filter(
+                    is_active=False
+                )
 
         return queryset
 
+
+# =========================================================
+# Inventory Settings
+# =========================================================
 
 class InventorySettingsView(APIView):
     """
@@ -507,26 +1060,51 @@ class InventorySettingsView(APIView):
     Read or update singleton inventory settings.
     """
 
-    permission_classes = (IsAdminOrStaff,)
+    permission_classes = (
+        IsAdminOrStaff,
+    )
 
     def get(self, request):
-        settings_obj = InventorySettings.load()
-        serializer = InventorySettingsSerializer(settings_obj)
-        return Response(serializer.data)
+        settings_obj = (
+            InventorySettings.load()
+        )
+
+        serializer = (
+            InventorySettingsSerializer(
+                settings_obj
+            )
+        )
+
+        return Response(
+            serializer.data
+        )
 
     def patch(self, request):
-        settings_obj = InventorySettings.load()
-        serializer = InventorySettingsSerializer(
-            settings_obj,
-            data=request.data,
-            partial=True,
+        settings_obj = (
+            InventorySettings.load()
         )
-        serializer.is_valid(raise_exception=True)
+
+        serializer = (
+            InventorySettingsSerializer(
+                settings_obj,
+                data=request.data,
+                partial=True,
+            )
+        )
+
+        serializer.is_valid(
+            raise_exception=True
+        )
+
         serializer.save()
 
         return Response(
             {
-                "message": "Inventory settings updated successfully.",
-                "settings": serializer.data,
+                "message": (
+                    "Inventory settings "
+                    "updated successfully."
+                ),
+                "settings":
+                    serializer.data,
             }
         )
