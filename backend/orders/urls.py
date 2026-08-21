@@ -1,6 +1,11 @@
 from django.urls import path
 
 from .views import (
+    AdminDashboardSummaryView,
+    AdminOrderDetailView,
+    AdminOrderListView,
+    AdminOrderStatusUpdateView,
+    AdminOrderUpdateView,
     CancelOrderView,
     CheckoutView,
     GuestOrderLookupView,
@@ -13,6 +18,7 @@ from .views import (
     ShippingAddressDetailView,
     ShippingAddressListCreateView,
 )
+
 
 urlpatterns = [
     # ==========================================
@@ -94,5 +100,38 @@ urlpatterns = [
         "addresses/<int:pk>/",
         ShippingAddressDetailView.as_view(),
         name="shipping-address-detail",
+    ),
+
+    # ==========================================
+    # Admin Order Management
+    # ==========================================
+    path(
+        "admin/orders/",
+        AdminOrderListView.as_view(),
+        name="admin-order-list",
+    ),
+
+    path(
+        "admin/orders/dashboard/",
+        AdminDashboardSummaryView.as_view(),
+        name="admin-order-dashboard",
+    ),
+
+    path(
+        "admin/orders/<str:order_number>/",
+        AdminOrderDetailView.as_view(),
+        name="admin-order-detail",
+    ),
+
+    path(
+        "admin/orders/<str:order_number>/update/",
+        AdminOrderUpdateView.as_view(),
+        name="admin-order-update",
+    ),
+
+    path(
+        "admin/orders/<str:order_number>/status/",
+        AdminOrderStatusUpdateView.as_view(),
+        name="admin-order-status-update",
     ),
 ]
