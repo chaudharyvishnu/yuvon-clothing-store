@@ -17,6 +17,50 @@ logger = logging.getLogger(__name__)
 
 
 # ==========================================================
+# Safe Celery Queue Helpers
+# ==========================================================
+
+def queue_task_safely(task, order_id, task_name):
+    """
+    Queue a Celery task safely.
+
+    Email notifications are secondary operations. A temporary
+    Celery/Redis/broker failure must never cause a successful
+    order, payment, or status update API request to return 500.
+    """
+    try:
+        task.delay(order_id)
+
+        logger.info(
+            "%s queued successfully for order ID %s.",
+            task_name,
+            order_id,
+        )
+
+    except Exception:
+        logger.exception(
+            "Unable to queue %s for order ID %s. "
+            "The order operation itself remains successful.",
+            task_name,
+            order_id,
+        )
+
+
+def queue_after_commit(task, order_id, task_name):
+    """
+    Queue the Celery task only after the current database
+    transaction has committed successfully.
+    """
+    transaction.on_commit(
+        lambda: queue_task_safely(
+            task,
+            order_id,
+            task_name,
+        )
+    )
+
+
+# ==========================================================
 # Store Previous Order Values
 # ==========================================================
 
@@ -27,9 +71,11 @@ def store_previous_order_values(
     **kwargs,
 ):
     """
-    Store previous order status and payment status before save.
+    Store the previous order status and payment status.
 
-    Ye values post_save signal me compare karne ke kaam aayengi.
+    These values are used by the post_save signal to determine
+    whether a status/payment notification actually needs to be
+    queued.
     """
 
     if not instance.pk:
@@ -73,15 +119,19 @@ def handle_order_saved(
     **kwargs,
 ):
     """
-    Queue emails after the database transaction commits.
+    Queue order notification emails after database commit.
 
     New order:
     - Customer order confirmation
     - Admin new-order notification
 
     Existing order:
-    - Order status update
-    - Payment-success email when payment_status changes to paid
+    - Order status update notification
+    - Payment-success notification
+
+    Celery/Redis failures are isolated from the main order
+    operation so they cannot turn a successful checkout into
+    an HTTP 500 response.
     """
 
     if raw:
@@ -89,29 +139,34 @@ def handle_order_saved(
 
     order_id = instance.pk
 
+    # ------------------------------------------------------
+    # New Order
+    # ------------------------------------------------------
+
     if created:
-        transaction.on_commit(
-            lambda: (
-                send_order_confirmation_email_task.delay(
-                    order_id
-                )
-            )
+        queue_after_commit(
+            send_order_confirmation_email_task,
+            order_id,
+            "order-confirmation email task",
         )
 
-        transaction.on_commit(
-            lambda: (
-                send_admin_order_notification_task.delay(
-                    order_id
-                )
-            )
+        queue_after_commit(
+            send_admin_order_notification_task,
+            order_id,
+            "admin new-order email task",
         )
 
         logger.info(
-            "New-order email tasks queued for order %s",
+            "New-order notification tasks registered "
+            "for order %s.",
             instance.order_number,
         )
 
         return
+
+    # ------------------------------------------------------
+    # Existing Order
+    # ------------------------------------------------------
 
     previous_status = getattr(
         instance,
@@ -125,39 +180,45 @@ def handle_order_saved(
         None,
     )
 
+    # ------------------------------------------------------
+    # Order Status Changed
+    # ------------------------------------------------------
+
     if (
         previous_status is not None
         and previous_status != instance.status
     ):
-        transaction.on_commit(
-            lambda: (
-                send_order_status_email_task.delay(
-                    order_id
-                )
-            )
+        queue_after_commit(
+            send_order_status_email_task,
+            order_id,
+            "order-status email task",
         )
 
         logger.info(
-            "Order-status email task queued for order %s: %s -> %s",
+            "Order-status notification task registered "
+            "for order %s: %s -> %s.",
             instance.order_number,
             previous_status,
             instance.status,
         )
 
+    # ------------------------------------------------------
+    # Payment Became Paid
+    # ------------------------------------------------------
+
     if (
         instance.payment_status == "paid"
         and previous_payment_status != "paid"
     ):
-        transaction.on_commit(
-            lambda: (
-                send_payment_success_email_task.delay(
-                    order_id
-                )
-            )
+        queue_after_commit(
+            send_payment_success_email_task,
+            order_id,
+            "payment-success email task",
         )
 
         logger.info(
-            "Payment-success email task queued for order %s",
+            "Payment-success notification task registered "
+            "for order %s.",
             instance.order_number,
         )
 
@@ -175,13 +236,13 @@ def handle_payment_saved(
     **kwargs,
 ):
     """
-    Safety fallback:
+    Payment-success notification fallback.
 
-    Agar Payment captured ho gaya ho lekin kisi reason se Order signal
-    payment email queue na kar paya ho, to payment task queue karta hai.
+    If a Payment becomes captured and the related Order is
+    already marked paid, queue a payment-success notification.
 
-    Task ko repeat hone se bachane ke liye Order.payment_status bhi paid
-    hona zaroori hai.
+    Celery/broker failures are intentionally isolated from the
+    payment operation.
     """
 
     if raw or created:
@@ -195,15 +256,14 @@ def handle_payment_saved(
     if order.payment_status != "paid":
         return
 
-    transaction.on_commit(
-        lambda: (
-            send_payment_success_email_task.delay(
-                order.pk
-            )
-        )
+    queue_after_commit(
+        send_payment_success_email_task,
+        order.pk,
+        "payment-success fallback email task",
     )
 
     logger.info(
-        "Payment-success fallback task queued for order %s",
+        "Payment-success fallback notification task registered "
+        "for order %s.",
         order.order_number,
     )
