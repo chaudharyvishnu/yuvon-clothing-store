@@ -424,6 +424,36 @@ def sync_cod_payment_after_delivery(order):
 
 
 # =========================================================
+# Fresh Order Response Helper
+# =========================================================
+
+def get_fresh_order_for_response(order):
+    """
+    Reload the order and serializer relations from the database.
+
+    This prevents a stale select_related Payment object from
+    appearing in the response immediately after COD delivery.
+    """
+
+    return (
+        Order.objects
+        .select_related(
+            "user",
+            "shipping_address",
+            "payment",
+        )
+        .prefetch_related(
+            "items",
+            "items__product",
+            "items__variant",
+        )
+        .get(
+            pk=order.pk,
+        )
+    )
+
+
+# =========================================================
 # Checkout / Order Creation
 # =========================================================
 
@@ -3019,6 +3049,12 @@ class AdminOrderUpdateView(
             order
         )
 
+        # Reload the order so the response uses the latest
+        # Order and nested Payment values after COD delivery.
+        order = get_fresh_order_for_response(
+            order
+        )
+
         response_serializer = (
             AdminOrderDetailSerializer(
                 order,
@@ -3143,6 +3179,12 @@ class AdminOrderStatusUpdateView(
         # -------------------------------------------------
 
         sync_cod_payment_after_delivery(
+            order
+        )
+
+        # Reload the order so the response uses the latest
+        # Order and nested Payment values after COD delivery.
+        order = get_fresh_order_for_response(
             order
         )
 
