@@ -42,6 +42,9 @@ import Checkout from "./pages/Checkout";
 
 import Dashboard from "./pages/admin/Dashboard";
 
+import AdminOrders from "./components/admin/AdminOrders";
+import AdminOrderDetails from "./components/admin/AdminOrderDetails";
+
 import {
   CartProvider,
 } from "./context/CartContext";
@@ -88,7 +91,9 @@ function App() {
 
             <Route
               path="/shop"
-              element={<Shop />}
+              element={
+                <Shop />
+              }
             />
 
             <Route
@@ -164,6 +169,24 @@ function App() {
               element={
                 <AdminRoute>
                   <Dashboard />
+                </AdminRoute>
+              }
+            />
+
+            <Route
+              path="/admin/orders"
+              element={
+                <AdminRoute>
+                  <AdminOrders />
+                </AdminRoute>
+              }
+            />
+
+            <Route
+              path="/admin/orders/:orderNumber"
+              element={
+                <AdminRoute>
+                  <AdminOrderDetails />
                 </AdminRoute>
               }
             />

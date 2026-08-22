@@ -1389,6 +1389,103 @@ export async function toggleReviewHelpful(
 
 
 // ======================================
+// Admin Orders
+// ======================================
+
+export async function fetchAdminOrders(
+  params = {}
+) {
+  const cleanParams =
+    Object.fromEntries(
+      Object.entries(
+        params
+      ).filter(
+        ([, value]) =>
+          value !==
+            undefined &&
+          value !==
+            null &&
+          value !== ""
+      )
+    );
+
+  const query =
+    new URLSearchParams(
+      cleanParams
+    ).toString();
+
+  return apiRequest(
+    `/orders/admin/orders/${
+      query
+        ? `?${query}`
+        : ""
+    }`
+  );
+}
+
+
+export async function fetchAdminOrderDetail(
+  orderNumber
+) {
+  return apiRequest(
+    `/orders/admin/orders/${encodeURIComponent(
+      orderNumber
+    )}/`
+  );
+}
+
+
+export async function updateAdminOrder(
+  orderNumber,
+  payload
+) {
+  return apiRequest(
+    `/orders/admin/orders/${encodeURIComponent(
+      orderNumber
+    )}/update/`,
+    {
+      method:
+        "PATCH",
+
+      body:
+        JSON.stringify(
+          payload
+        ),
+    }
+  );
+}
+
+
+export async function updateAdminOrderStatus(
+  orderNumber,
+  orderStatus
+) {
+  return apiRequest(
+    `/orders/admin/orders/${encodeURIComponent(
+      orderNumber
+    )}/status/`,
+    {
+      method:
+        "PATCH",
+
+      body:
+        JSON.stringify({
+          status:
+            orderStatus,
+        }),
+    }
+  );
+}
+
+
+export async function fetchAdminOrderDashboard() {
+  return apiRequest(
+    "/orders/admin/orders/dashboard/"
+  );
+}
+
+
+// ======================================
 // Useful Exports
 // ======================================
 
