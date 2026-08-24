@@ -19,6 +19,38 @@ import {
 import "../../styles/dashboard.css";
 
 
+/* =========================================================
+   API Configuration
+========================================================= */
+
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  "http://127.0.0.1:8000/api";
+
+
+const getAccessToken = () => {
+  return (
+    localStorage.getItem(
+      "yuvon_access_token"
+    ) ||
+    localStorage.getItem(
+      "access"
+    ) ||
+    localStorage.getItem(
+      "access_token"
+    ) ||
+    localStorage.getItem(
+      "token"
+    ) ||
+    ""
+  );
+};
+
+
+/* =========================================================
+   Order Status Options
+========================================================= */
+
 const ORDER_STATUS_OPTIONS = [
   {
     value: "pending",
@@ -51,28 +83,48 @@ const ORDER_STATUS_OPTIONS = [
 ];
 
 
-const formatCurrency = (value) => {
+/* =========================================================
+   Formatting Helpers
+========================================================= */
+
+const formatCurrency = (
+  value
+) => {
   const amount =
-    Number(value || 0);
+    Number(
+      value ||
+      0
+    );
 
   return new Intl.NumberFormat(
     "en-IN",
     {
-      style: "currency",
-      currency: "INR",
-      maximumFractionDigits: 2,
+      style:
+        "currency",
+
+      currency:
+        "INR",
+
+      maximumFractionDigits:
+        2,
     }
-  ).format(amount);
+  ).format(
+    amount
+  );
 };
 
 
-const formatDateTime = (value) => {
+const formatDateTime = (
+  value
+) => {
   if (!value) {
     return "-";
   }
 
   const date =
-    new Date(value);
+    new Date(
+      value
+    );
 
   if (
     Number.isNaN(
@@ -85,20 +137,27 @@ const formatDateTime = (value) => {
   return date.toLocaleString(
     "en-IN",
     {
-      dateStyle: "medium",
-      timeStyle: "short",
+      dateStyle:
+        "medium",
+
+      timeStyle:
+        "short",
     }
   );
 };
 
 
-const formatDate = (value) => {
+const formatDate = (
+  value
+) => {
   if (!value) {
     return "-";
   }
 
   const date =
-    new Date(value);
+    new Date(
+      value
+    );
 
   if (
     Number.isNaN(
@@ -111,15 +170,19 @@ const formatDate = (value) => {
   return date.toLocaleDateString(
     "en-IN",
     {
-      dateStyle: "medium",
+      dateStyle:
+        "medium",
     }
   );
 };
 
 
-const formatStatus = (value) => {
+const formatStatus = (
+  value
+) => {
   return String(
-    value || "-"
+    value ||
+    "-"
   )
     .replace(
       /_/g,
@@ -127,11 +190,18 @@ const formatStatus = (value) => {
     )
     .replace(
       /\b\w/g,
-      (character) =>
-        character.toUpperCase()
+      (
+        character
+      ) =>
+        character
+          .toUpperCase()
     );
 };
 
+
+/* =========================================================
+   Component
+========================================================= */
 
 const AdminOrderDetails = () => {
   const {
@@ -141,61 +211,151 @@ const AdminOrderDetails = () => {
   const navigate =
     useNavigate();
 
+
+  /* =======================================================
+     Order State
+  ======================================================= */
+
   const [
     order,
     setOrder,
-  ] = useState(null);
+  ] = useState(
+    null
+  );
 
   const [
     selectedStatus,
     setSelectedStatus,
-  ] = useState("");
+  ] = useState(
+    ""
+  );
 
   const [
     courierName,
     setCourierName,
-  ] = useState("");
+  ] = useState(
+    ""
+  );
 
   const [
     trackingId,
     setTrackingId,
-  ] = useState("");
+  ] = useState(
+    ""
+  );
 
   const [
     estimatedDelivery,
     setEstimatedDelivery,
-  ] = useState("");
+  ] = useState(
+    ""
+  );
 
   const [
     adminNote,
     setAdminNote,
-  ] = useState("");
+  ] = useState(
+    ""
+  );
+
+
+  /* =======================================================
+     Loading States
+  ======================================================= */
 
   const [
     loading,
     setLoading,
-  ] = useState(true);
+  ] = useState(
+    true
+  );
 
   const [
     statusSaving,
     setStatusSaving,
-  ] = useState(false);
+  ] = useState(
+    false
+  );
 
   const [
     detailsSaving,
     setDetailsSaving,
-  ] = useState(false);
+  ] = useState(
+    false
+  );
+
+  const [
+    labelDownloading,
+    setLabelDownloading,
+  ] = useState(
+    false
+  );
+
+
+  /* =======================================================
+     Messages
+  ======================================================= */
 
   const [
     error,
     setError,
-  ] = useState("");
+  ] = useState(
+    ""
+  );
 
   const [
     successMessage,
     setSuccessMessage,
-  ] = useState("");
+  ] = useState(
+    ""
+  );
 
+
+  /* =======================================================
+     Sync Order State
+  ======================================================= */
+
+  const syncOrderState = (
+    nextOrder
+  ) => {
+    if (!nextOrder) {
+      return;
+    }
+
+    setOrder(
+      nextOrder
+    );
+
+    setSelectedStatus(
+      nextOrder?.status ||
+      ""
+    );
+
+    setCourierName(
+      nextOrder?.courier_name ||
+      ""
+    );
+
+    setTrackingId(
+      nextOrder?.tracking_id ||
+      ""
+    );
+
+    setEstimatedDelivery(
+      nextOrder?.estimated_delivery ||
+      ""
+    );
+
+    setAdminNote(
+      nextOrder?.admin_note ||
+      ""
+    );
+  };
+
+
+  /* =======================================================
+     Load Order
+  ======================================================= */
 
   const loadOrder =
     async () => {
@@ -204,13 +364,20 @@ const AdminOrderDetails = () => {
           "Order number is missing."
         );
 
-        setLoading(false);
+        setLoading(
+          false
+        );
 
         return;
       }
 
-      setLoading(true);
-      setError("");
+      setLoading(
+        true
+      );
+
+      setError(
+        ""
+      );
 
       try {
         const data =
@@ -218,43 +385,20 @@ const AdminOrderDetails = () => {
             orderNumber
           );
 
-        setOrder(
+        syncOrderState(
           data
-        );
-
-        setSelectedStatus(
-          data?.status ||
-          ""
-        );
-
-        setCourierName(
-          data?.courier_name ||
-          ""
-        );
-
-        setTrackingId(
-          data?.tracking_id ||
-          ""
-        );
-
-        setEstimatedDelivery(
-          data?.estimated_delivery ||
-          ""
-        );
-
-        setAdminNote(
-          data?.admin_note ||
-          ""
         );
       } catch (
         requestError
       ) {
         setError(
           requestError?.message ||
-            "Unable to load order details."
+          "Unable to load order details."
         );
       } finally {
-        setLoading(false);
+        setLoading(
+          false
+        );
       }
     };
 
@@ -268,6 +412,10 @@ const AdminOrderDetails = () => {
     ]
   );
 
+
+  /* =======================================================
+     Full Address
+  ======================================================= */
 
   const fullAddress =
     useMemo(
@@ -285,14 +433,22 @@ const AdminOrderDetails = () => {
           order.postal_code,
           order.country,
         ]
-          .filter(Boolean)
-          .join(", ");
+          .filter(
+            Boolean
+          )
+          .join(
+            ", "
+          );
       },
       [
         order,
       ]
     );
 
+
+  /* =======================================================
+     Status Update
+  ======================================================= */
 
   const handleStatusUpdate =
     async (
@@ -307,9 +463,17 @@ const AdminOrderDetails = () => {
         return;
       }
 
-      setStatusSaving(true);
-      setError("");
-      setSuccessMessage("");
+      setStatusSaving(
+        true
+      );
+
+      setError(
+        ""
+      );
+
+      setSuccessMessage(
+        ""
+      );
 
       try {
         const response =
@@ -322,51 +486,32 @@ const AdminOrderDetails = () => {
           response?.order ||
           response;
 
-        setOrder(
+        syncOrderState(
           updatedOrder
-        );
-
-        setSelectedStatus(
-          updatedOrder?.status ||
-          selectedStatus
-        );
-
-        setCourierName(
-          updatedOrder?.courier_name ||
-          ""
-        );
-
-        setTrackingId(
-          updatedOrder?.tracking_id ||
-          ""
-        );
-
-        setEstimatedDelivery(
-          updatedOrder?.estimated_delivery ||
-          ""
-        );
-
-        setAdminNote(
-          updatedOrder?.admin_note ||
-          ""
         );
 
         setSuccessMessage(
           response?.message ||
-            "Order status updated successfully."
+          "Order status updated successfully."
         );
       } catch (
         requestError
       ) {
         setError(
           requestError?.message ||
-            "Unable to update order status."
+          "Unable to update order status."
         );
       } finally {
-        setStatusSaving(false);
+        setStatusSaving(
+          false
+        );
       }
     };
 
+
+  /* =======================================================
+     Courier / Admin Details Update
+  ======================================================= */
 
   const handleOrderDetailsUpdate =
     async (
@@ -378,9 +523,17 @@ const AdminOrderDetails = () => {
         return;
       }
 
-      setDetailsSaving(true);
-      setError("");
-      setSuccessMessage("");
+      setDetailsSaving(
+        true
+      );
+
+      setError(
+        ""
+      );
+
+      setSuccessMessage(
+        ""
+      );
 
       const payload = {
         courier_name:
@@ -408,51 +561,155 @@ const AdminOrderDetails = () => {
           response?.order ||
           response;
 
-        setOrder(
+        syncOrderState(
           updatedOrder
-        );
-
-        setSelectedStatus(
-          updatedOrder?.status ||
-          selectedStatus
-        );
-
-        setCourierName(
-          updatedOrder?.courier_name ||
-          ""
-        );
-
-        setTrackingId(
-          updatedOrder?.tracking_id ||
-          ""
-        );
-
-        setEstimatedDelivery(
-          updatedOrder?.estimated_delivery ||
-          ""
-        );
-
-        setAdminNote(
-          updatedOrder?.admin_note ||
-          ""
         );
 
         setSuccessMessage(
           response?.message ||
-            "Order details updated successfully."
+          "Order details updated successfully."
         );
       } catch (
         requestError
       ) {
         setError(
           requestError?.message ||
-            "Unable to update order details."
+          "Unable to update order details."
         );
       } finally {
-        setDetailsSaving(false);
+        setDetailsSaving(
+          false
+        );
       }
     };
 
+
+  /* =======================================================
+     Shipping Label Download
+  ======================================================= */
+
+  const handleShippingLabelDownload =
+    async () => {
+      if (
+        !orderNumber ||
+        labelDownloading
+      ) {
+        return;
+      }
+
+      setLabelDownloading(
+        true
+      );
+
+      setError(
+        ""
+      );
+
+      setSuccessMessage(
+        ""
+      );
+
+      try {
+        const accessToken =
+          getAccessToken();
+
+        if (!accessToken) {
+          throw new Error(
+            "Admin session expired. Please login again."
+          );
+        }
+
+        const response =
+          await fetch(
+            `${API_BASE_URL}/orders/admin/orders/${encodeURIComponent(
+              orderNumber
+            )}/shipping-label/`,
+            {
+              method:
+                "GET",
+
+              headers: {
+                Authorization:
+                  `Bearer ${accessToken}`,
+              },
+            }
+          );
+
+        if (!response.ok) {
+          let errorMessage =
+            "Unable to download shipping label.";
+
+          try {
+            const responseData =
+              await response.json();
+
+            errorMessage =
+              responseData?.detail ||
+              responseData?.message ||
+              errorMessage;
+          } catch {
+            // Response may be HTML/text instead of JSON.
+          }
+
+          throw new Error(
+            errorMessage
+          );
+        }
+
+        const pdfBlob =
+          await response.blob();
+
+        const blobUrl =
+          window.URL
+            .createObjectURL(
+              pdfBlob
+            );
+
+        const downloadLink =
+          document.createElement(
+            "a"
+          );
+
+        downloadLink.href =
+          blobUrl;
+
+        downloadLink.download =
+          `shipping-label-${orderNumber}.pdf`;
+
+        document.body.appendChild(
+          downloadLink
+        );
+
+        downloadLink.click();
+
+        downloadLink.remove();
+
+        window.URL
+          .revokeObjectURL(
+            blobUrl
+          );
+
+        setSuccessMessage(
+          "Shipping label downloaded successfully."
+        );
+      } catch (
+        requestError
+      ) {
+        setError(
+          requestError?.message ||
+          "Unable to download shipping label."
+        );
+      } finally {
+        setLabelDownloading(
+          false
+        );
+      }
+    };
+
+
+  /* =======================================================
+     Loading Screen
+  ======================================================= */
 
   if (loading) {
     return (
@@ -465,17 +722,23 @@ const AdminOrderDetails = () => {
   }
 
 
+  /* =======================================================
+     Load Error
+  ======================================================= */
+
   if (
     error &&
     !order
   ) {
     return (
       <main className="admin-dashboard-page">
+
         <section className="dashboard-error">
           {error}
         </section>
 
         <div className="dashboard-header-actions">
+
           <button
             type="button"
             className="dashboard-button dashboard-button-secondary"
@@ -487,7 +750,9 @@ const AdminOrderDetails = () => {
           >
             Back to Orders
           </button>
+
         </div>
+
       </main>
     );
   }
@@ -504,10 +769,19 @@ const AdminOrderDetails = () => {
   }
 
 
+  /* =======================================================
+     UI
+  ======================================================= */
+
   return (
     <main className="admin-dashboard-page">
 
+      {/* ===================================================
+          Header
+      =================================================== */}
+
       <section className="dashboard-header">
+
         <div>
           <p className="dashboard-eyebrow">
             Yuvon Admin
@@ -526,7 +800,9 @@ const AdminOrderDetails = () => {
           </p>
         </div>
 
+
         <div className="dashboard-header-actions">
+
           <Link
             to="/admin/orders"
             className="dashboard-button dashboard-button-secondary"
@@ -534,18 +810,46 @@ const AdminOrderDetails = () => {
             Back to Orders
           </Link>
 
+
           <button
             type="button"
             className="dashboard-button dashboard-button-secondary"
             onClick={
               loadOrder
             }
+            disabled={
+              loading
+            }
           >
             Refresh
           </button>
+
+
+          <button
+            type="button"
+            className="dashboard-button dashboard-button-primary"
+            onClick={
+              handleShippingLabelDownload
+            }
+            disabled={
+              labelDownloading
+            }
+          >
+            {
+              labelDownloading
+                ? "Downloading Label..."
+                : "Download Shipping Label"
+            }
+          </button>
+
         </div>
+
       </section>
 
+
+      {/* ===================================================
+          Messages
+      =================================================== */}
 
       {error && (
         <section className="dashboard-error">
@@ -569,9 +873,14 @@ const AdminOrderDetails = () => {
       )}
 
 
+      {/* ===================================================
+          Summary
+      =================================================== */}
+
       <section className="dashboard-three-column">
 
         <article className="dashboard-panel">
+
           <span className="dashboard-panel-label">
             Order Status
           </span>
@@ -592,10 +901,12 @@ const AdminOrderDetails = () => {
               )
             }
           </small>
+
         </article>
 
 
         <article className="dashboard-panel">
+
           <span className="dashboard-panel-label">
             Payment
           </span>
@@ -616,10 +927,12 @@ const AdminOrderDetails = () => {
               ).toUpperCase()
             }
           </small>
+
         </article>
 
 
         <article className="dashboard-panel">
+
           <span className="dashboard-panel-label">
             Order Total
           </span>
@@ -647,14 +960,20 @@ const AdminOrderDetails = () => {
                 : "s"
             }
           </small>
+
         </article>
 
       </section>
 
 
+      {/* ===================================================
+          Customer / Timeline
+      =================================================== */}
+
       <section className="dashboard-two-column">
 
         <article className="dashboard-panel">
+
           <div className="dashboard-section-header">
             <div>
               <h2>
@@ -668,6 +987,7 @@ const AdminOrderDetails = () => {
           </div>
 
           <div>
+
             <p>
               <strong>
                 Name:
@@ -716,11 +1036,14 @@ const AdminOrderDetails = () => {
                 fullAddress
               }
             </p>
+
           </div>
+
         </article>
 
 
         <article className="dashboard-panel">
+
           <div className="dashboard-section-header">
             <div>
               <h2>
@@ -730,6 +1053,7 @@ const AdminOrderDetails = () => {
           </div>
 
           <div>
+
             <p>
               <strong>
                 Placed:
@@ -784,16 +1108,24 @@ const AdminOrderDetails = () => {
                 )
               }
             </p>
+
           </div>
+
         </article>
 
       </section>
 
 
+      {/* ===================================================
+          Order Items
+      =================================================== */}
+
       <section className="dashboard-section">
+
         <article className="dashboard-panel">
 
           <div className="dashboard-section-header">
+
             <div>
               <h2>
                 Order Items
@@ -803,10 +1135,14 @@ const AdminOrderDetails = () => {
                 Products included in this order.
               </p>
             </div>
+
           </div>
 
+
           <div className="dashboard-table-wrap">
+
             <table className="dashboard-table">
+
               <thead>
                 <tr>
                   <th>
@@ -835,7 +1171,9 @@ const AdminOrderDetails = () => {
                 </tr>
               </thead>
 
+
               <tbody>
+
                 {
                   order.items?.length
                     ? (
@@ -848,6 +1186,7 @@ const AdminOrderDetails = () => {
                               item.id
                             }
                           >
+
                             <td>
                               <strong>
                                 {
@@ -901,6 +1240,7 @@ const AdminOrderDetails = () => {
                                 )
                               }
                             </td>
+
                           </tr>
                         )
                       )
@@ -915,19 +1255,29 @@ const AdminOrderDetails = () => {
                       </tr>
                     )
                 }
+
               </tbody>
+
             </table>
+
           </div>
 
         </article>
+
       </section>
 
+
+      {/* ===================================================
+          Status / Courier
+      =================================================== */}
 
       <section className="dashboard-two-column">
 
         <article className="dashboard-panel">
+
           <div className="dashboard-section-header">
             <div>
+
               <h2>
                 Update Status
               </h2>
@@ -935,15 +1285,19 @@ const AdminOrderDetails = () => {
               <p>
                 Change the current order status.
               </p>
+
             </div>
           </div>
+
 
           <form
             onSubmit={
               handleStatusUpdate
             }
           >
+
             <div className="dashboard-filter-field">
+
               <label htmlFor="admin-order-status">
                 Status
               </label>
@@ -961,6 +1315,7 @@ const AdminOrderDetails = () => {
                   )
                 }
               >
+
                 {
                   ORDER_STATUS_OPTIONS.map(
                     (
@@ -981,10 +1336,14 @@ const AdminOrderDetails = () => {
                     )
                   )
                 }
+
               </select>
+
             </div>
 
+
             <div className="dashboard-filter-actions">
+
               <button
                 type="submit"
                 className="dashboard-button dashboard-button-primary"
@@ -998,8 +1357,11 @@ const AdminOrderDetails = () => {
                     : "Update Status"
                 }
               </button>
+
             </div>
+
           </form>
+
 
           {
             selectedStatus ===
@@ -1012,12 +1374,16 @@ const AdminOrderDetails = () => {
               </p>
             )
           }
+
         </article>
 
 
         <article className="dashboard-panel">
+
           <div className="dashboard-section-header">
+
             <div>
+
               <h2>
                 Courier Details
               </h2>
@@ -1025,15 +1391,20 @@ const AdminOrderDetails = () => {
               <p>
                 Update courier, tracking and delivery details.
               </p>
+
             </div>
+
           </div>
+
 
           <form
             onSubmit={
               handleOrderDetailsUpdate
             }
           >
+
             <div className="dashboard-filter-field">
+
               <label htmlFor="admin-courier-name">
                 Courier Name
               </label>
@@ -1053,10 +1424,12 @@ const AdminOrderDetails = () => {
                   )
                 }
               />
+
             </div>
 
 
             <div className="dashboard-filter-field">
+
               <label htmlFor="admin-tracking-id">
                 Tracking ID
               </label>
@@ -1076,10 +1449,12 @@ const AdminOrderDetails = () => {
                   )
                 }
               />
+
             </div>
 
 
             <div className="dashboard-filter-field">
+
               <label htmlFor="admin-estimated-delivery">
                 Estimated Delivery
               </label>
@@ -1098,10 +1473,12 @@ const AdminOrderDetails = () => {
                   )
                 }
               />
+
             </div>
 
 
             <div className="dashboard-filter-field">
+
               <label htmlFor="admin-note">
                 Admin Note
               </label>
@@ -1121,10 +1498,12 @@ const AdminOrderDetails = () => {
                   )
                 }
               />
+
             </div>
 
 
             <div className="dashboard-filter-actions">
+
               <button
                 type="submit"
                 className="dashboard-button dashboard-button-primary"
@@ -1138,21 +1517,30 @@ const AdminOrderDetails = () => {
                     : "Save Courier Details"
                 }
               </button>
+
             </div>
+
           </form>
+
         </article>
 
       </section>
 
 
+      {/* ===================================================
+          Payment / Amount
+      =================================================== */}
+
       <section className="dashboard-two-column">
 
         <article className="dashboard-panel">
+
           <div className="dashboard-section-header">
             <h2>
               Payment Details
             </h2>
           </div>
+
 
           <p>
             <strong>
@@ -1167,6 +1555,7 @@ const AdminOrderDetails = () => {
             }
           </p>
 
+
           <p>
             <strong>
               Payment Status:
@@ -1178,6 +1567,7 @@ const AdminOrderDetails = () => {
             }
           </p>
 
+
           <p>
             <strong>
               Gateway Status:
@@ -1188,6 +1578,7 @@ const AdminOrderDetails = () => {
               )
             }
           </p>
+
 
           <p>
             <strong>
@@ -1201,6 +1592,7 @@ const AdminOrderDetails = () => {
             }
           </p>
 
+
           <p>
             <strong>
               Transaction:
@@ -1210,6 +1602,7 @@ const AdminOrderDetails = () => {
               "-"
             }
           </p>
+
 
           <p>
             <strong>
@@ -1221,15 +1614,18 @@ const AdminOrderDetails = () => {
               )
             }
           </p>
+
         </article>
 
 
         <article className="dashboard-panel">
+
           <div className="dashboard-section-header">
             <h2>
               Amount Summary
             </h2>
           </div>
+
 
           <p>
             <strong>
@@ -1242,6 +1638,7 @@ const AdminOrderDetails = () => {
             }
           </p>
 
+
           <p>
             <strong>
               Discount:
@@ -1252,6 +1649,7 @@ const AdminOrderDetails = () => {
               )
             }
           </p>
+
 
           <p>
             <strong>
@@ -1264,6 +1662,7 @@ const AdminOrderDetails = () => {
             }
           </p>
 
+
           <p>
             <strong>
               Tax:
@@ -1274,6 +1673,7 @@ const AdminOrderDetails = () => {
               )
             }
           </p>
+
 
           <p>
             <strong>
@@ -1286,6 +1686,7 @@ const AdminOrderDetails = () => {
             }
           </p>
 
+
           <p>
             <strong>
               Coupon:
@@ -1295,15 +1696,22 @@ const AdminOrderDetails = () => {
               "-"
             }
           </p>
+
         </article>
 
       </section>
 
 
+      {/* ===================================================
+          Customer Note
+      =================================================== */}
+
       {
         order.customer_note && (
           <section className="dashboard-section">
+
             <article className="dashboard-panel">
+
               <div className="dashboard-section-header">
                 <h2>
                   Customer Note
@@ -1315,7 +1723,9 @@ const AdminOrderDetails = () => {
                   order.customer_note
                 }
               </p>
+
             </article>
+
           </section>
         )
       }

@@ -19,6 +19,8 @@ from .views import (
     ShippingAddressListCreateView,
 )
 
+from .shipping_labels import AdminShippingLabelView
+
 
 urlpatterns = [
     # ==========================================
@@ -133,5 +135,14 @@ urlpatterns = [
         "admin/orders/<str:order_number>/status/",
         AdminOrderStatusUpdateView.as_view(),
         name="admin-order-status-update",
+    ),
+
+    # ==========================================
+    # Admin Shipping Label
+    # ==========================================
+    path(
+        "admin/orders/<str:order_number>/shipping-label/",
+        AdminShippingLabelView.as_view(),
+        name="admin-order-shipping-label",
     ),
 ]
