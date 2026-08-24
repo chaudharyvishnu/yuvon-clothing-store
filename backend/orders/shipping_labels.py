@@ -13,7 +13,6 @@ from reportlab.lib.pagesizes import inch
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import (
-    KeepTogether,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -25,57 +24,113 @@ from .models import Order
 
 
 # =========================================================
-# Shipping Label Helpers
+# Shipping Label Configuration
 # =========================================================
 
 LABEL_WIDTH = 4 * inch
 LABEL_HEIGHT = 6 * inch
 
 
-def safe_text(value, fallback="-"):
+# =========================================================
+# Shipping Label Helpers
+# =========================================================
+
+def safe_text(
+    value,
+    fallback="-",
+):
     """
     Convert nullable values into printable strings.
     """
-    value = str(value or "").strip()
 
-    return value or fallback
+    value = str(
+        value or ""
+    ).strip()
+
+    return (
+        value
+        or fallback
+    )
 
 
-def format_money(value):
+def format_money(
+    value,
+):
     """
     Format amount as INR text for PDF label.
     """
+
     try:
-        return f"Rs. {float(value or 0):,.2f}"
-    except (TypeError, ValueError):
+        return (
+            f"Rs. "
+            f"{float(value or 0):,.2f}"
+        )
+
+    except (
+        TypeError,
+        ValueError,
+    ):
         return "Rs. 0.00"
 
 
-def format_datetime(value):
+def format_datetime(
+    value,
+):
     """
     Convert Django datetime into readable local time.
     """
+
     if not value:
         return "-"
 
     try:
-        local_value = timezone.localtime(value)
+        local_value = (
+            timezone.localtime(
+                value
+            )
+        )
 
         return local_value.strftime(
             "%d %b %Y, %I:%M %p"
         )
 
     except Exception:
-        return safe_text(value)
+        return safe_text(
+            value
+        )
 
 
-def get_shipping_address(order):
+def format_date(
+    value,
+):
+    """
+    Format date/date-like values for label display.
+    """
+
+    if not value:
+        return "-"
+
+    try:
+        return value.strftime(
+            "%d %b %Y"
+        )
+
+    except Exception:
+        return safe_text(
+            value
+        )
+
+
+def get_shipping_address(
+    order,
+):
     """
     Build shipping address using order snapshot fields.
 
-    Snapshot fields are preferred because they preserve
-    exactly what the customer entered during checkout.
+    Snapshot fields preserve exactly what customer
+    entered during checkout.
     """
+
     address_parts = [
         order.address_line_1,
         order.address_line_2,
@@ -89,17 +144,23 @@ def get_shipping_address(order):
     return ", ".join(
         str(value).strip()
         for value in address_parts
-        if value
-        and str(value).strip()
+        if (
+            value
+            and str(value).strip()
+        )
     )
 
 
-def get_barcode_value(order):
+def get_barcode_value(
+    order,
+):
     """
-    Prefer tracking ID for the shipping barcode.
+    Prefer tracking ID for barcode.
 
-    If tracking ID is not available yet, use order number.
+    If tracking ID is unavailable, fall back
+    to order number.
     """
+
     tracking_id = safe_text(
         order.tracking_id,
         fallback="",
@@ -113,11 +174,17 @@ def get_barcode_value(order):
     )
 
 
-def get_payment_label(order):
+def get_payment_label(
+    order,
+):
     """
     Return customer-facing payment type.
     """
-    if order.payment_method == "cod":
+
+    if (
+        order.payment_method
+        == "cod"
+    ):
         return "COD"
 
     return "PREPAID"
@@ -127,7 +194,9 @@ def get_payment_label(order):
 # Admin Shipping Label PDF
 # =========================================================
 
-class AdminShippingLabelView(APIView):
+class AdminShippingLabelView(
+    APIView
+):
     """
     GET /api/orders/admin/orders/<order_number>/shipping-label/
 
@@ -162,89 +231,119 @@ class AdminShippingLabelView(APIView):
 
         buffer = BytesIO()
 
+        # =================================================
+        # PDF Document
+        # =================================================
+
         document = SimpleDocTemplate(
             buffer,
             pagesize=(
                 LABEL_WIDTH,
                 LABEL_HEIGHT,
             ),
-            rightMargin=7 * mm,
-            leftMargin=7 * mm,
-            topMargin=6 * mm,
-            bottomMargin=6 * mm,
+            rightMargin=5 * mm,
+            leftMargin=5 * mm,
+            topMargin=4 * mm,
+            bottomMargin=4 * mm,
             title=(
                 f"Shipping Label "
                 f"{order.order_number}"
             ),
-            author="Yuvon Design Hub",
+            author=(
+                "Yuvon Design Hub"
+            ),
         )
 
-        # -------------------------------------------------
+        # =================================================
         # Styles
-        # -------------------------------------------------
+        # =================================================
 
         brand_style = ParagraphStyle(
             name="ShippingLabelBrand",
             fontName="Helvetica-Bold",
-            fontSize=16,
-            leading=18,
+            fontSize=14,
+            leading=15,
             alignment=1,
-            spaceAfter=2,
+            spaceAfter=1,
         )
 
         subtitle_style = ParagraphStyle(
             name="ShippingLabelSubtitle",
             fontName="Helvetica-Bold",
-            fontSize=8,
-            leading=10,
+            fontSize=7,
+            leading=8,
             alignment=1,
         )
 
         normal_style = ParagraphStyle(
             name="ShippingLabelNormal",
             fontName="Helvetica",
-            fontSize=8.5,
-            leading=11,
+            fontSize=7.5,
+            leading=9,
         )
 
         small_style = ParagraphStyle(
             name="ShippingLabelSmall",
             fontName="Helvetica",
-            fontSize=7,
-            leading=9,
+            fontSize=6.5,
+            leading=8,
         )
 
         strong_style = ParagraphStyle(
             name="ShippingLabelStrong",
             fontName="Helvetica-Bold",
-            fontSize=9,
-            leading=11,
+            fontSize=8,
+            leading=9,
         )
 
         payment_style = ParagraphStyle(
             name="ShippingLabelPayment",
             fontName="Helvetica-Bold",
-            fontSize=15,
-            leading=17,
+            fontSize=11,
+            leading=12,
             alignment=1,
+        )
+
+        address_name_style = ParagraphStyle(
+            name="ShippingLabelAddressName",
+            fontName="Helvetica-Bold",
+            fontSize=9,
+            leading=10,
         )
 
         address_style = ParagraphStyle(
             name="ShippingLabelAddress",
-            fontName="Helvetica-Bold",
-            fontSize=10,
-            leading=13,
+            fontName="Helvetica",
+            fontSize=7.5,
+            leading=9,
         )
 
-        # -------------------------------------------------
+        item_style = ParagraphStyle(
+            name="ShippingLabelItem",
+            fontName="Helvetica",
+            fontSize=6,
+            leading=7,
+        )
+
+        item_header_style = ParagraphStyle(
+            name="ShippingLabelItemHeader",
+            fontName="Helvetica-Bold",
+            fontSize=6,
+            leading=7,
+        )
+
+        # =================================================
         # Basic Data
-        # -------------------------------------------------
+        # =================================================
 
         shipping_address = (
             get_shipping_address(
                 order
             )
-            or "Shipping address unavailable"
+            or (
+                "Shipping address "
+                "unavailable"
+            )
         )
 
         payment_label = (
@@ -259,16 +358,27 @@ class AdminShippingLabelView(APIView):
             )
         )
 
-        total_items = sum(
-            int(item.quantity or 0)
-            for item in order.items.all()
+        order_items = list(
+            order.items.all()
         )
 
-        # -------------------------------------------------
+        total_items = sum(
+            int(
+                item.quantity
+                or 0
+            )
+            for item in order_items
+        )
+
+        # =================================================
         # Story
-        # -------------------------------------------------
+        # =================================================
 
         story = []
+
+        # -------------------------------------------------
+        # Brand
+        # -------------------------------------------------
 
         story.append(
             Paragraph(
@@ -287,7 +397,7 @@ class AdminShippingLabelView(APIView):
         story.append(
             Spacer(
                 1,
-                3 * mm,
+                1.5 * mm,
             )
         )
 
@@ -295,11 +405,16 @@ class AdminShippingLabelView(APIView):
         # Order / Payment Header
         # -------------------------------------------------
 
-        payment_text = payment_label
+        payment_text = (
+            payment_label
+        )
 
-        if order.payment_method == "cod":
+        if (
+            order.payment_method
+            == "cod"
+        ):
             payment_text = (
-                f"COD - COLLECT "
+                "COD - COLLECT "
                 f"{format_money(order.total_amount)}"
             )
 
@@ -321,14 +436,14 @@ class AdminShippingLabelView(APIView):
                 [
                     Paragraph(
                         (
-                            "<b>Order Date:</b><br/>"
+                            "<b>Order Date:</b> "
                             f"{format_datetime(order.placed_at)}"
                         ),
                         small_style,
                     ),
                     Paragraph(
                         (
-                            "<b>Status:</b><br/>"
+                            "<b>Status:</b> "
                             f"{safe_text(order.status).replace('_', ' ').title()}"
                         ),
                         small_style,
@@ -348,14 +463,14 @@ class AdminShippingLabelView(APIView):
                         "BOX",
                         (0, 0),
                         (-1, -1),
-                        1,
+                        0.8,
                         colors.black,
                     ),
                     (
                         "INNERGRID",
                         (0, 0),
                         (-1, -1),
-                        0.5,
+                        0.35,
                         colors.black,
                     ),
                     (
@@ -368,25 +483,25 @@ class AdminShippingLabelView(APIView):
                         "LEFTPADDING",
                         (0, 0),
                         (-1, -1),
-                        5,
+                        3,
                     ),
                     (
                         "RIGHTPADDING",
                         (0, 0),
                         (-1, -1),
-                        5,
+                        3,
                     ),
                     (
                         "TOPPADDING",
                         (0, 0),
                         (-1, -1),
-                        5,
+                        3,
                     ),
                     (
                         "BOTTOMPADDING",
                         (0, 0),
                         (-1, -1),
-                        5,
+                        3,
                     ),
                 ]
             )
@@ -399,7 +514,7 @@ class AdminShippingLabelView(APIView):
         story.append(
             Spacer(
                 1,
-                3 * mm,
+                1.5 * mm,
             )
         )
 
@@ -407,60 +522,59 @@ class AdminShippingLabelView(APIView):
         # Ship To
         # -------------------------------------------------
 
-        ship_to_content = [
-            Paragraph(
-                "SHIP TO",
-                strong_style,
-            ),
-            Spacer(
-                1,
-                1 * mm,
-            ),
-            Paragraph(
-                safe_text(
-                    order.full_name
-                ),
-                address_style,
-            ),
-            Paragraph(
-                shipping_address,
-                normal_style,
-            ),
-            Spacer(
-                1,
-                1.5 * mm,
-            ),
-            Paragraph(
-                (
-                    "<b>Phone:</b> "
-                    f"{safe_text(order.phone)}"
-                ),
-                normal_style,
-            ),
-        ]
-
-        if order.alternate_phone:
-            ship_to_content.append(
+        ship_to_rows = [
+            [
+                Paragraph(
+                    "SHIP TO",
+                    strong_style,
+                )
+            ],
+            [
+                Paragraph(
+                    safe_text(
+                        order.full_name
+                    ),
+                    address_name_style,
+                )
+            ],
+            [
+                Paragraph(
+                    shipping_address,
+                    address_style,
+                )
+            ],
+            [
                 Paragraph(
                     (
-                        "<b>Alternate:</b> "
-                        f"{safe_text(order.alternate_phone)}"
+                        "<b>Phone:</b> "
+                        f"{safe_text(order.phone)}"
                     ),
                     normal_style,
                 )
+            ],
+        ]
+
+        if (
+            order.alternate_phone
+        ):
+            ship_to_rows.append(
+                [
+                    Paragraph(
+                        (
+                            "<b>Alternate:</b> "
+                            f"{safe_text(order.alternate_phone)}"
+                        ),
+                        small_style,
+                    )
+                ]
             )
 
         ship_to_table = Table(
-            [
-                [
-                    KeepTogether(
-                        ship_to_content
-                    )
-                ]
-            ],
+            ship_to_rows,
             colWidths=[
                 94 * mm,
             ],
+            splitByRow=1,
         )
 
         ship_to_table.setStyle(
@@ -470,32 +584,38 @@ class AdminShippingLabelView(APIView):
                         "BOX",
                         (0, 0),
                         (-1, -1),
-                        1,
+                        0.8,
                         colors.black,
                     ),
                     (
                         "LEFTPADDING",
                         (0, 0),
                         (-1, -1),
-                        6,
+                        4,
                     ),
                     (
                         "RIGHTPADDING",
                         (0, 0),
                         (-1, -1),
-                        6,
+                        4,
                     ),
                     (
                         "TOPPADDING",
                         (0, 0),
                         (-1, -1),
-                        6,
+                        2,
                     ),
                     (
                         "BOTTOMPADDING",
                         (0, 0),
                         (-1, -1),
-                        6,
+                        2,
+                    ),
+                    (
+                        "VALIGN",
+                        (0, 0),
+                        (-1, -1),
+                        "TOP",
                     ),
                 ]
             )
@@ -508,7 +628,7 @@ class AdminShippingLabelView(APIView):
         story.append(
             Spacer(
                 1,
-                3 * mm,
+                1.5 * mm,
             )
         )
 
@@ -537,8 +657,8 @@ class AdminShippingLabelView(APIView):
                 [
                     Paragraph(
                         (
-                            "<b>Estimated Delivery</b><br/>"
-                            f"{safe_text(order.estimated_delivery)}"
+                            "<b>Est. Delivery</b><br/>"
+                            f"{format_date(order.estimated_delivery)}"
                         ),
                         small_style,
                     ),
@@ -564,14 +684,14 @@ class AdminShippingLabelView(APIView):
                         "BOX",
                         (0, 0),
                         (-1, -1),
-                        1,
+                        0.8,
                         colors.black,
                     ),
                     (
                         "INNERGRID",
                         (0, 0),
                         (-1, -1),
-                        0.5,
+                        0.35,
                         colors.black,
                     ),
                     (
@@ -584,25 +704,25 @@ class AdminShippingLabelView(APIView):
                         "LEFTPADDING",
                         (0, 0),
                         (-1, -1),
-                        5,
+                        3,
                     ),
                     (
                         "RIGHTPADDING",
                         (0, 0),
                         (-1, -1),
-                        5,
+                        3,
                     ),
                     (
                         "TOPPADDING",
                         (0, 0),
                         (-1, -1),
-                        5,
+                        2,
                     ),
                     (
                         "BOTTOMPADDING",
                         (0, 0),
                         (-1, -1),
-                        5,
+                        2,
                     ),
                 ]
             )
@@ -615,7 +735,7 @@ class AdminShippingLabelView(APIView):
         story.append(
             Spacer(
                 1,
-                4 * mm,
+                1.5 * mm,
             )
         )
 
@@ -625,8 +745,8 @@ class AdminShippingLabelView(APIView):
 
         barcode = code128.Code128(
             barcode_value,
-            barHeight=15 * mm,
-            barWidth=0.45,
+            barHeight=11 * mm,
+            barWidth=0.38,
             humanReadable=True,
         )
 
@@ -660,20 +780,20 @@ class AdminShippingLabelView(APIView):
                         "BOX",
                         (0, 0),
                         (-1, -1),
-                        1,
+                        0.8,
                         colors.black,
                     ),
                     (
                         "TOPPADDING",
                         (0, 0),
                         (-1, -1),
-                        5,
+                        2,
                     ),
                     (
                         "BOTTOMPADDING",
                         (0, 0),
                         (-1, -1),
-                        5,
+                        2,
                     ),
                 ]
             )
@@ -686,7 +806,7 @@ class AdminShippingLabelView(APIView):
         story.append(
             Spacer(
                 1,
-                3 * mm,
+                1.5 * mm,
             )
         )
 
@@ -698,16 +818,16 @@ class AdminShippingLabelView(APIView):
             [
                 Paragraph(
                     "<b>Item</b>",
-                    small_style,
+                    item_header_style,
                 ),
                 Paragraph(
                     "<b>Qty</b>",
-                    small_style,
+                    item_header_style,
                 ),
             ]
         ]
 
-        for item in order.items.all():
+        for item in order_items:
             product_name = safe_text(
                 item.product_name
             )
@@ -717,16 +837,19 @@ class AdminShippingLabelView(APIView):
                 item.size,
             ]
 
-            variant_text = " / ".join(
-                str(value)
-                for value in variant_parts
-                if value
+            variant_text = (
+                " / ".join(
+                    str(value)
+                    for value in variant_parts
+                    if value
+                )
             )
 
             if variant_text:
                 product_name = (
                     f"{product_name}"
-                    f"<br/><font size='6'>"
+                    f"<br/>"
+                    f"<font size='5'>"
                     f"{variant_text}"
                     f"</font>"
                 )
@@ -735,14 +858,14 @@ class AdminShippingLabelView(APIView):
                 [
                     Paragraph(
                         product_name,
-                        small_style,
+                        item_style,
                     ),
                     Paragraph(
                         str(
                             item.quantity
                             or 0
                         ),
-                        small_style,
+                        item_style,
                     ),
                 ]
             )
@@ -753,6 +876,8 @@ class AdminShippingLabelView(APIView):
                 82 * mm,
                 12 * mm,
             ],
+            repeatRows=1,
+            splitByRow=1,
         )
 
         items_table.setStyle(
@@ -762,14 +887,14 @@ class AdminShippingLabelView(APIView):
                         "BOX",
                         (0, 0),
                         (-1, -1),
-                        0.8,
+                        0.7,
                         colors.black,
                     ),
                     (
                         "INNERGRID",
                         (0, 0),
                         (-1, -1),
-                        0.3,
+                        0.25,
                         colors.black,
                     ),
                     (
@@ -788,25 +913,25 @@ class AdminShippingLabelView(APIView):
                         "LEFTPADDING",
                         (0, 0),
                         (-1, -1),
-                        4,
+                        2,
                     ),
                     (
                         "RIGHTPADDING",
                         (0, 0),
                         (-1, -1),
-                        4,
+                        2,
                     ),
                     (
                         "TOPPADDING",
                         (0, 0),
                         (-1, -1),
-                        3,
+                        1.5,
                     ),
                     (
                         "BOTTOMPADDING",
                         (0, 0),
                         (-1, -1),
-                        3,
+                        1.5,
                     ),
                 ]
             )
@@ -816,9 +941,9 @@ class AdminShippingLabelView(APIView):
             items_table
         )
 
-        # -------------------------------------------------
+        # =================================================
         # Build PDF
-        # -------------------------------------------------
+        # =================================================
 
         document.build(
             story
@@ -830,16 +955,23 @@ class AdminShippingLabelView(APIView):
 
         buffer.close()
 
+        # =================================================
+        # HTTP Response
+        # =================================================
+
         response = HttpResponse(
             pdf_value,
-            content_type="application/pdf",
+            content_type=(
+                "application/pdf"
+            ),
         )
 
         response[
             "Content-Disposition"
         ] = (
             f'attachment; filename='
-            f'"shipping-label-{order.order_number}.pdf"'
+            f'"shipping-label-'
+            f'{order.order_number}.pdf"'
         )
 
         response[
