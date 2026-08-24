@@ -126,9 +126,6 @@ def get_shipping_address(
 ):
     """
     Build shipping address using order snapshot fields.
-
-    Snapshot fields preserve exactly what customer
-    entered during checkout.
     """
 
     address_parts = [
@@ -157,8 +154,8 @@ def get_barcode_value(
     """
     Prefer tracking ID for barcode.
 
-    If tracking ID is unavailable, fall back
-    to order number.
+    Fall back to order number if tracking ID
+    is unavailable.
     """
 
     tracking_id = safe_text(
@@ -174,20 +171,64 @@ def get_barcode_value(
     )
 
 
-def get_payment_label(
+def get_payment_text(
     order,
 ):
     """
-    Return customer-facing payment type.
+    Build shipping-label payment text.
+
+    Rules:
+    - Paid order => PAID + amount
+    - COD unpaid => COD - COLLECT + amount
+    - Prepaid unpaid => PREPAID + payment status
     """
+
+    payment_status = safe_text(
+        order.payment_status,
+        fallback="pending",
+    ).lower()
+
+    amount = format_money(
+        order.total_amount
+    )
+
+    if payment_status == "paid":
+        return (
+            "PAID"
+            f"<br/><font size='8'>"
+            f"{amount}"
+            f"</font>"
+        )
 
     if (
         order.payment_method
         == "cod"
     ):
-        return "COD"
+        return (
+            "COD - COLLECT"
+            f"<br/><font size='8'>"
+            f"{amount}"
+            f"</font>"
+        )
 
-    return "PREPAID"
+    status_text = (
+        payment_status
+        .replace(
+            "_",
+            " ",
+        )
+        .upper()
+    )
+
+    return (
+        "PREPAID"
+        f"<br/><font size='7'>"
+        f"{status_text}"
+        f"</font>"
+        f"<br/><font size='7'>"
+        f"{amount}"
+        f"</font>"
+    )
 
 
 # =========================================================
@@ -200,7 +241,7 @@ class AdminShippingLabelView(
     """
     GET /api/orders/admin/orders/<order_number>/shipping-label/
 
-    Generates a printable 4 x 6 inch PDF shipping label.
+    Generates printable 4 x 6 inch shipping label.
 
     Admin only.
     """
@@ -346,8 +387,8 @@ class AdminShippingLabelView(
             )
         )
 
-        payment_label = (
-            get_payment_label(
+        payment_text = (
+            get_payment_text(
                 order
             )
         )
@@ -404,19 +445,6 @@ class AdminShippingLabelView(
         # -------------------------------------------------
         # Order / Payment Header
         # -------------------------------------------------
-
-        payment_text = (
-            payment_label
-        )
-
-        if (
-            order.payment_method
-            == "cod"
-        ):
-            payment_text = (
-                "COD - COLLECT "
-                f"{format_money(order.total_amount)}"
-            )
 
         order_header = Table(
             [
@@ -531,8 +559,9 @@ class AdminShippingLabelView(
             ],
             [
                 Paragraph(
-                    safe_text(
-                        order.full_name
+                    (
+                        "<b>Customer:</b> "
+                        f"{safe_text(order.full_name)}"
                     ),
                     address_name_style,
                 )
