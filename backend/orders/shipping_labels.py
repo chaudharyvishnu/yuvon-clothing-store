@@ -148,6 +148,83 @@ def get_shipping_address(
     )
 
 
+def get_customer_name(
+    order,
+):
+    """
+    Return the best available customer name.
+    """
+
+    full_name = safe_text(
+        getattr(
+            order,
+            "full_name",
+            "",
+        ),
+        fallback="",
+    )
+
+    if full_name:
+        return full_name
+
+    user = getattr(
+        order,
+        "user",
+        None,
+    )
+
+    if user:
+        if hasattr(
+            user,
+            "get_full_name",
+        ):
+            user_full_name = safe_text(
+                user.get_full_name(),
+                fallback="",
+            )
+
+            if user_full_name:
+                return user_full_name
+
+        display_name = safe_text(
+            getattr(
+                user,
+                "display_name",
+                "",
+            ),
+            fallback="",
+        )
+
+        if display_name:
+            return display_name
+
+        username = safe_text(
+            getattr(
+                user,
+                "username",
+                "",
+            ),
+            fallback="",
+        )
+
+        if username:
+            return username
+
+        email = safe_text(
+            getattr(
+                user,
+                "email",
+                "",
+            ),
+            fallback="",
+        )
+
+        if email:
+            return email
+
+    return "Customer"
+
+
 def get_barcode_value(
     order,
 ):
@@ -178,14 +255,20 @@ def get_payment_text(
     Build shipping-label payment text.
 
     Rules:
-    - Paid order => PAID + amount
-    - COD unpaid => COD - COLLECT + amount
-    - Prepaid unpaid => PREPAID + payment status
+    - Paid => PAID
+    - COD unpaid => UNPAID - COD
+    - Prepaid unpaid => UNPAID - PREPAID
+    - Failed => PAYMENT FAILED
     """
 
     payment_status = safe_text(
         order.payment_status,
         fallback="pending",
+    ).lower()
+
+    payment_method = safe_text(
+        order.payment_method,
+        fallback="",
     ).lower()
 
     amount = format_money(
@@ -200,32 +283,25 @@ def get_payment_text(
             f"</font>"
         )
 
-    if (
-        order.payment_method
-        == "cod"
-    ):
+    if payment_status == "failed":
         return (
-            "COD - COLLECT"
+            "PAYMENT FAILED"
             f"<br/><font size='8'>"
             f"{amount}"
             f"</font>"
         )
 
-    status_text = (
-        payment_status
-        .replace(
-            "_",
-            " ",
+    if payment_method == "cod":
+        return (
+            "UNPAID - COD"
+            f"<br/><font size='8'>"
+            f"COLLECT {amount}"
+            f"</font>"
         )
-        .upper()
-    )
 
     return (
-        "PREPAID"
-        f"<br/><font size='7'>"
-        f"{status_text}"
-        f"</font>"
-        f"<br/><font size='7'>"
+        "UNPAID - PREPAID"
+        f"<br/><font size='8'>"
         f"{amount}"
         f"</font>"
     )
@@ -384,6 +460,12 @@ class AdminShippingLabelView(
             or (
                 "Shipping address "
                 "unavailable"
+            )
+        )
+
+        customer_name = (
+            get_customer_name(
+                order
             )
         )
 
@@ -561,7 +643,7 @@ class AdminShippingLabelView(
                 Paragraph(
                     (
                         "<b>Customer:</b> "
-                        f"{safe_text(order.full_name)}"
+                        f"{customer_name}"
                     ),
                     address_name_style,
                 )
