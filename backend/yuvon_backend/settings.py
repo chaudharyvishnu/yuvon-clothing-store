@@ -28,25 +28,38 @@ load_dotenv(
 # Environment Helpers
 # =========================================================
 
-def env_bool(name, default=False):
+def env_bool(
+    name,
+    default=False,
+):
     """
     Convert common environment values to bool.
     """
 
-    value = os.getenv(name)
+    value = os.getenv(
+        name
+    )
 
     if value is None:
         return default
 
-    return value.strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    return (
+        value
+        .strip()
+        .lower()
+        in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+    )
 
 
-def env_list(name, default=""):
+def env_list(
+    name,
+    default="",
+):
     """
     Convert comma-separated environment variable into list.
     """
@@ -61,7 +74,10 @@ def env_list(name, default=""):
     ]
 
 
-def env_int(name, default):
+def env_int(
+    name,
+    default,
+):
     """
     Convert environment variable into integer.
     """
@@ -70,14 +86,19 @@ def env_int(name, default):
         return int(
             os.getenv(
                 name,
-                str(default),
+                str(
+                    default
+                ),
             )
         )
+
     except (
         TypeError,
         ValueError,
     ):
-        return int(default)
+        return int(
+            default
+        )
 
 
 # =========================================================
@@ -89,17 +110,23 @@ DEBUG = env_bool(
     default=True,
 )
 
+
 SECRET_KEY = os.getenv(
     "DJANGO_SECRET_KEY",
     "",
 ).strip()
 
+
 if not SECRET_KEY:
+
     if DEBUG:
+
         SECRET_KEY = (
             "django-insecure-local-development-key-change-me"
         )
+
     else:
+
         raise ImproperlyConfigured(
             "DJANGO_SECRET_KEY must be configured in production."
         )
@@ -115,7 +142,11 @@ ALLOWED_HOSTS = env_list(
     else "",
 )
 
-if not DEBUG and not ALLOWED_HOSTS:
+
+if (
+    not DEBUG
+    and not ALLOWED_HOSTS
+):
     raise ImproperlyConfigured(
         "ALLOWED_HOSTS must be configured in production."
     )
@@ -159,11 +190,13 @@ if not DEBUG:
     )
 
     SESSION_COOKIE_SECURE = True
+
     CSRF_COOKIE_SECURE = True
 
     SESSION_COOKIE_HTTPONLY = True
 
     SESSION_COOKIE_SAMESITE = "Lax"
+
     CSRF_COOKIE_SAMESITE = "Lax"
 
     SECURE_HSTS_SECONDS = env_int(
@@ -244,23 +277,35 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
 ]
 
+
 if USE_WHITENOISE:
+
     MIDDLEWARE.append(
         "whitenoise.middleware.WhiteNoiseMiddleware"
     )
 
+
 MIDDLEWARE += [
+
     "corsheaders.middleware.CorsMiddleware",
+
     "django.contrib.sessions.middleware.SessionMiddleware",
+
     "django.middleware.common.CommonMiddleware",
+
     "django.middleware.csrf.CsrfViewMiddleware",
+
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+
     "django.contrib.messages.middleware.MessageMiddleware",
+
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
 
-ROOT_URLCONF = "yuvon_backend.urls"
+ROOT_URLCONF = (
+    "yuvon_backend.urls"
+)
 
 
 # =========================================================
@@ -274,21 +319,26 @@ TEMPLATES = [
         ),
 
         "DIRS": [
-            BASE_DIR / "templates",
+            BASE_DIR /
+            "templates",
         ],
 
         "APP_DIRS": True,
 
         "OPTIONS": {
+
             "context_processors": [
+
                 (
                     "django.template.context_processors."
                     "request"
                 ),
+
                 (
                     "django.contrib.auth.context_processors."
                     "auth"
                 ),
+
                 (
                     "django.contrib.messages.context_processors."
                     "messages"
@@ -320,6 +370,7 @@ if DATABASE_ENGINE in {
 }:
 
     DATABASES = {
+
         "default": {
 
             "ENGINE":
@@ -362,6 +413,7 @@ if DATABASE_ENGINE in {
                 ),
 
             "OPTIONS": {
+
                 "connect_timeout":
                     env_int(
                         "DB_CONNECT_TIMEOUT",
@@ -371,16 +423,19 @@ if DATABASE_ENGINE in {
         }
     }
 
+
 else:
 
     DATABASES = {
+
         "default": {
 
             "ENGINE":
                 "django.db.backends.sqlite3",
 
             "NAME":
-                BASE_DIR / "db.sqlite3",
+                BASE_DIR /
+                "db.sqlite3",
         }
     }
 
@@ -405,24 +460,28 @@ if (
 # =========================================================
 
 AUTH_PASSWORD_VALIDATORS = [
+
     {
         "NAME": (
             "django.contrib.auth.password_validation."
             "UserAttributeSimilarityValidator"
         ),
     },
+
     {
         "NAME": (
             "django.contrib.auth.password_validation."
             "MinimumLengthValidator"
         ),
     },
+
     {
         "NAME": (
             "django.contrib.auth.password_validation."
             "CommonPasswordValidator"
         ),
     },
+
     {
         "NAME": (
             "django.contrib.auth.password_validation."
@@ -436,9 +495,15 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # =========================================================
 
-LANGUAGE_CODE = "en-us"
+LANGUAGE_CODE = (
+    "en-us"
+)
 
-TIME_ZONE = "Asia/Kolkata"
+
+TIME_ZONE = (
+    "Asia/Kolkata"
+)
+
 
 USE_I18N = True
 
@@ -449,27 +514,41 @@ USE_TZ = True
 # Static Files
 # =========================================================
 
-STATIC_URL = "/static/"
-
-STATIC_ROOT = (
-    BASE_DIR / "staticfiles"
+STATIC_URL = (
+    "/static/"
 )
 
 
-# Always define the storage backends.
-# This ensures collectstatic creates a valid manifest
-# inside the Docker image.
+STATIC_ROOT = (
+    BASE_DIR /
+    "staticfiles"
+)
+
+
+# =========================================================
+# Storage Backends
+# =========================================================
 
 STORAGES = {
 
+    # -----------------------------------------------------
+    # Uploaded media files
+    # -----------------------------------------------------
+
     "default": {
+
         "BACKEND": (
             "django.core.files.storage."
             "FileSystemStorage"
         ),
     },
 
+    # -----------------------------------------------------
+    # Static files
+    # -----------------------------------------------------
+
     "staticfiles": {
+
         "BACKEND": (
             "whitenoise.storage."
             "CompressedManifestStaticFilesStorage"
@@ -482,10 +561,57 @@ STORAGES = {
 # Media Files
 # =========================================================
 
-MEDIA_URL = "/media/"
+MEDIA_URL = (
+    "/media/"
+)
+
 
 MEDIA_ROOT = (
-    BASE_DIR / "media"
+    BASE_DIR /
+    "media"
+)
+
+
+# =========================================================
+# Local Media Serving
+# =========================================================
+#
+# DEBUG=True:
+#     Local Django development normally serves /media/.
+#
+# SERVE_MEDIA_LOCALLY=True:
+#     Allows urls.py to explicitly serve media even when
+#     DEBUG was accidentally disabled during local testing.
+#
+# Production:
+#     Set SERVE_MEDIA_LOCALLY=False.
+#     Production media should eventually use persistent
+#     storage such as Cloudinary / S3 / Railway volume.
+# =========================================================
+
+SERVE_MEDIA_LOCALLY = env_bool(
+    "SERVE_MEDIA_LOCALLY",
+    default=DEBUG,
+)
+
+
+# =========================================================
+# File Upload Limits
+# =========================================================
+#
+# Useful because admin bulk product images may be uploaded
+# as a ZIP file.
+# =========================================================
+
+DATA_UPLOAD_MAX_MEMORY_SIZE = env_int(
+    "DATA_UPLOAD_MAX_MEMORY_SIZE",
+    50 * 1024 * 1024,
+)
+
+
+FILE_UPLOAD_MAX_MEMORY_SIZE = env_int(
+    "FILE_UPLOAD_MAX_MEMORY_SIZE",
+    10 * 1024 * 1024,
 )
 
 
@@ -505,17 +631,28 @@ CORS_ALLOWED_ORIGINS = env_list(
     else "",
 )
 
+
 CORS_ALLOW_CREDENTIALS = True
 
+
 CORS_ALLOW_HEADERS = [
+
     "accept",
+
     "accept-encoding",
+
     "authorization",
+
     "content-type",
+
     "dnt",
+
     "origin",
+
     "user-agent",
+
     "x-csrftoken",
+
     "x-requested-with",
 ]
 
@@ -527,6 +664,7 @@ CORS_ALLOW_HEADERS = [
 REST_FRAMEWORK = {
 
     "DEFAULT_AUTHENTICATION_CLASSES": (
+
         (
             "rest_framework_simplejwt."
             "authentication.JWTAuthentication"
@@ -534,10 +672,12 @@ REST_FRAMEWORK = {
     ),
 
     "DEFAULT_PERMISSION_CLASSES": (
+
         "rest_framework.permissions.AllowAny",
     ),
 
     "DEFAULT_PAGINATION_CLASS": (
+
         "rest_framework.pagination."
         "PageNumberPagination"
     ),
@@ -549,6 +689,7 @@ REST_FRAMEWORK = {
         ),
 
     "DEFAULT_RENDERER_CLASSES": (
+
         (
             "rest_framework.renderers."
             "JSONRenderer"
@@ -556,7 +697,9 @@ REST_FRAMEWORK = {
     )
     if not DEBUG
     else (
+
         "rest_framework.renderers.JSONRenderer",
+
         (
             "rest_framework.renderers."
             "BrowsableAPIRenderer"
@@ -587,11 +730,14 @@ SIMPLE_JWT = {
             )
         ),
 
-    "ROTATE_REFRESH_TOKENS": True,
+    "ROTATE_REFRESH_TOKENS":
+        True,
 
-    "BLACKLIST_AFTER_ROTATION": True,
+    "BLACKLIST_AFTER_ROTATION":
+        True,
 
-    "UPDATE_LAST_LOGIN": True,
+    "UPDATE_LAST_LOGIN":
+        True,
 
     "AUTH_HEADER_TYPES": (
         "Bearer",
@@ -607,6 +753,7 @@ AUTH_USER_MODEL = (
     "accounts.User"
 )
 
+
 DEFAULT_AUTO_FIELD = (
     "django.db.models.BigAutoField"
 )
@@ -618,7 +765,7 @@ DEFAULT_AUTO_FIELD = (
 
 FRONTEND_URL = os.getenv(
     "FRONTEND_URL",
-    "http://localhost:3000",
+    "http://localhost:5173",
 ).strip().rstrip("/")
 
 
@@ -687,7 +834,8 @@ DEFAULT_FROM_EMAIL = os.getenv(
     "DEFAULT_FROM_EMAIL",
     (
         EMAIL_HOST_USER
-        or "Yuvon <no-reply@yuvon.com>"
+        or
+        "Yuvon <no-reply@yuvon.com>"
     ),
 ).strip()
 
@@ -711,11 +859,16 @@ ADMIN_EMAILS = env_list(
 
 
 ADMINS = [
+
     (
         f"Admin {index + 1}",
         email,
     )
-    for index, email
+
+    for (
+        index,
+        email,
+    )
     in enumerate(
         ADMIN_EMAILS
     )
@@ -730,7 +883,8 @@ ORDER_NOTIFICATION_EMAIL = (
             if ADMIN_EMAILS
             else ""
         ),
-    ).strip()
+    )
+    .strip()
 )
 
 
@@ -790,16 +944,22 @@ REDIS_PASSWORD = os.getenv(
 if REDIS_PASSWORD:
 
     DEFAULT_REDIS_URL = (
-        f"redis://:{REDIS_PASSWORD}"
+
+        f"redis://:"
+        f"{REDIS_PASSWORD}"
+
         f"@{REDIS_HOST}:"
         f"{REDIS_PORT}/"
         f"{REDIS_DB}"
     )
 
+
 else:
 
     DEFAULT_REDIS_URL = (
+
         f"redis://"
+
         f"{REDIS_HOST}:"
         f"{REDIS_PORT}/"
         f"{REDIS_DB}"
@@ -906,8 +1066,11 @@ CELERY_TASK_DEFAULT_QUEUE = os.getenv(
 
 
 CELERY_TASK_ROUTES = {
+
     "orders.tasks.*": {
-        "queue": "orders",
+
+        "queue":
+            "orders",
     },
 }
 
@@ -952,15 +1115,18 @@ LOG_LEVEL = os.getenv(
 
 LOGGING = {
 
-    "version": 1,
+    "version":
+        1,
 
-    "disable_existing_loggers": False,
+    "disable_existing_loggers":
+        False,
 
     "formatters": {
 
         "verbose": {
 
             "format": (
+
                 "{levelname} "
                 "{asctime} "
                 "{name} "
@@ -968,7 +1134,8 @@ LOGGING = {
                 "{message}"
             ),
 
-            "style": "{",
+            "style":
+                "{",
         },
     },
 
@@ -1016,9 +1183,11 @@ LOGGING = {
             ],
 
             "level":
-                "WARNING"
-                if not DEBUG
-                else "INFO",
+                (
+                    "WARNING"
+                    if not DEBUG
+                    else "INFO"
+                ),
 
             "propagate":
                 False,
@@ -1040,13 +1209,16 @@ ENABLE_FILE_LOGGING = env_bool(
 if ENABLE_FILE_LOGGING:
 
     LOG_DIR = (
-        BASE_DIR / "logs"
+        BASE_DIR /
+        "logs"
     )
+
 
     LOG_DIR.mkdir(
         parents=True,
         exist_ok=True,
     )
+
 
     LOGGING[
         "handlers"
@@ -1066,7 +1238,9 @@ if ENABLE_FILE_LOGGING:
             ),
 
         "maxBytes":
-            5 * 1024 * 1024,
+            5 *
+            1024 *
+            1024,
 
         "backupCount":
             5,
@@ -1074,6 +1248,7 @@ if ENABLE_FILE_LOGGING:
         "formatter":
             "verbose",
     }
+
 
     LOGGING[
         "root"
@@ -1097,12 +1272,14 @@ if not DEBUG:
             "for production."
         )
 
+
     if not CSRF_TRUSTED_ORIGINS:
 
         raise ImproperlyConfigured(
             "CSRF_TRUSTED_ORIGINS must be configured "
             "for production."
         )
+
 
     if SECRET_KEY.startswith(
         "django-insecure"
@@ -1125,38 +1302,64 @@ if DEBUG:
         + "=" * 70
     )
 
+
     print(
         "YUVON DEVELOPMENT CONFIGURATION"
     )
 
+
     print(
         "=" * 70
     )
+
 
     print(
         "DEBUG:",
         DEBUG,
     )
 
+
     print(
         "ENV FILE:",
         ENV_FILE,
     )
+
 
     print(
         "ENV EXISTS:",
         ENV_FILE.exists(),
     )
 
+
     print(
         "DATABASE ENGINE:",
         DATABASE_ENGINE,
     )
 
+
+    print(
+        "MEDIA URL:",
+        MEDIA_URL,
+    )
+
+
+    print(
+        "MEDIA ROOT:",
+        MEDIA_ROOT,
+    )
+
+
+    print(
+        "SERVE MEDIA LOCALLY:",
+        SERVE_MEDIA_LOCALLY,
+    )
+
+
     print(
         "EMAIL BACKEND:",
         EMAIL_BACKEND,
     )
+
 
     print(
         "EMAIL HOST USER CONFIGURED:",
@@ -1165,6 +1368,7 @@ if DEBUG:
         ),
     )
 
+
     print(
         "RAZORPAY KEY CONFIGURED:",
         bool(
@@ -1172,35 +1376,42 @@ if DEBUG:
         ),
     )
 
+
     print(
         "CELERY BROKER:",
         CELERY_BROKER_URL,
     )
+
 
     print(
         "CELERY RESULT BACKEND:",
         CELERY_RESULT_BACKEND,
     )
 
+
     print(
         "CELERY EAGER MODE:",
         CELERY_TASK_ALWAYS_EAGER,
     )
+
 
     print(
         "WHITENOISE:",
         USE_WHITENOISE,
     )
 
+
     print(
         "FRONTEND URL:",
         FRONTEND_URL,
     )
 
+
     print(
         "CORS ALLOWED ORIGINS:",
         CORS_ALLOWED_ORIGINS,
     )
+
 
     print(
         "=" * 70

@@ -14,75 +14,152 @@ import {
   registerUser,
 } from "../services/api";
 
-const AuthContext = createContext(null);
+
+const AuthContext =
+  createContext(null);
+
 
 /* =========================================================
    Local Storage Keys
 ========================================================= */
 
-const ACCESS_TOKEN = "yuvon_access_token";
-const REFRESH_TOKEN = "yuvon_refresh_token";
-const USER_DATA = "yuvon_user";
+const ACCESS_TOKEN =
+  "yuvon_access_token";
+
+const REFRESH_TOKEN =
+  "yuvon_refresh_token";
+
+const USER_DATA =
+  "yuvon_user";
+
 
 /* =========================================================
    Storage Helpers
 ========================================================= */
 
-const getStoredAccessToken = () => {
-  return (
-    localStorage.getItem(ACCESS_TOKEN) ||
-    localStorage.getItem("access") ||
-    localStorage.getItem("access_token") ||
-    localStorage.getItem("token") ||
-    ""
-  );
-};
+const getStoredAccessToken =
+  () => {
+    return (
+      localStorage.getItem(
+        ACCESS_TOKEN
+      ) ||
+      localStorage.getItem(
+        "access"
+      ) ||
+      localStorage.getItem(
+        "access_token"
+      ) ||
+      localStorage.getItem(
+        "token"
+      ) ||
+      ""
+    );
+  };
 
-const getStoredRefreshToken = () => {
-  return (
-    localStorage.getItem(REFRESH_TOKEN) ||
-    localStorage.getItem("refresh") ||
-    localStorage.getItem("refresh_token") ||
-    ""
-  );
-};
 
-const storeAccessToken = (token) => {
-  if (!token) {
-    return;
+const getStoredRefreshToken =
+  () => {
+    return (
+      localStorage.getItem(
+        REFRESH_TOKEN
+      ) ||
+      localStorage.getItem(
+        "refresh"
+      ) ||
+      localStorage.getItem(
+        "refresh_token"
+      ) ||
+      ""
+    );
+  };
+
+
+const storeAccessToken =
+  (token) => {
+    if (!token) {
+      return;
+    }
+
+    localStorage.setItem(
+      ACCESS_TOKEN,
+      token
+    );
+
+    /*
+     * Compatibility alias.
+     */
+    localStorage.setItem(
+      "access",
+      token
+    );
+  };
+
+
+const storeRefreshToken =
+  (token) => {
+    if (!token) {
+      return;
+    }
+
+    localStorage.setItem(
+      REFRESH_TOKEN,
+      token
+    );
+
+    localStorage.setItem(
+      "refresh",
+      token
+    );
+  };
+
+
+/* =========================================================
+   User Helpers
+========================================================= */
+
+function normalizeUser(
+  value
+) {
+  if (
+    !value ||
+    typeof value !== "object"
+  ) {
+    return null;
   }
 
-  localStorage.setItem(
-    ACCESS_TOKEN,
-    token
-  );
+  return {
+    ...value,
 
-  /*
-   * Compatibility alias.
-   * Some services may still read
-   * the "access" key.
-   */
-  localStorage.setItem(
-    "access",
-    token
-  );
-};
+    is_staff:
+      Boolean(
+        value?.is_staff ??
+        value?.isStaff ??
+        false
+      ),
 
-const storeRefreshToken = (token) => {
-  if (!token) {
-    return;
-  }
+    is_superuser:
+      Boolean(
+        value?.is_superuser ??
+        value?.isSuperuser ??
+        false
+      ),
 
-  localStorage.setItem(
-    REFRESH_TOKEN,
-    token
-  );
+    is_admin:
+      Boolean(
+        value?.is_admin ??
+        value?.isAdmin ??
+        false
+      ),
 
-  localStorage.setItem(
-    "refresh",
-    token
-  );
-};
+    role:
+      String(
+        value?.role || ""
+      )
+        .trim()
+        .toLowerCase(),
+  };
+}
+
 
 /* =========================================================
    Auth Provider
@@ -91,6 +168,7 @@ const storeRefreshToken = (token) => {
 export function AuthProvider({
   children,
 }) {
+
   /* -------------------------------------------------------
      User
   ------------------------------------------------------- */
@@ -105,9 +183,16 @@ export function AuthProvider({
           USER_DATA
         );
 
-      return savedUser
-        ? JSON.parse(savedUser)
-        : null;
+      if (!savedUser) {
+        return null;
+      }
+
+      return normalizeUser(
+        JSON.parse(
+          savedUser
+        )
+      );
+
     } catch (error) {
       console.error(
         "Saved user load error:",
@@ -122,6 +207,7 @@ export function AuthProvider({
     }
   });
 
+
   /* -------------------------------------------------------
      Tokens
   ------------------------------------------------------- */
@@ -130,15 +216,19 @@ export function AuthProvider({
     accessToken,
     setAccessToken,
   ] = useState(
-    () => getStoredAccessToken()
+    () =>
+      getStoredAccessToken()
   );
+
 
   const [
     refreshToken,
     setRefreshToken,
   ] = useState(
-    () => getStoredRefreshToken()
+    () =>
+      getStoredRefreshToken()
   );
+
 
   /* -------------------------------------------------------
      UI State
@@ -149,104 +239,135 @@ export function AuthProvider({
     setLoading,
   ] = useState(true);
 
+
   const [
     isLoginOpen,
     setIsLoginOpen,
   ] = useState(false);
 
+
   /* =======================================================
      User Storage
   ======================================================= */
 
-  const saveUser = useCallback(
-    (nextUser) => {
-      const normalizedUser =
-        nextUser || null;
+  const saveUser =
+    useCallback(
+      (
+        nextUser
+      ) => {
 
-      setUserState(
-        normalizedUser
-      );
+        const normalizedUser =
+          normalizeUser(
+            nextUser
+          );
 
-      if (normalizedUser) {
-        localStorage.setItem(
-          USER_DATA,
-          JSON.stringify(
-            normalizedUser
-          )
+        setUserState(
+          normalizedUser
         );
-      } else {
-        localStorage.removeItem(
-          USER_DATA
-        );
-      }
-    },
-    []
-  );
+
+        if (
+          normalizedUser
+        ) {
+          localStorage.setItem(
+            USER_DATA,
+            JSON.stringify(
+              normalizedUser
+            )
+          );
+        } else {
+          localStorage.removeItem(
+            USER_DATA
+          );
+        }
+      },
+      []
+    );
+
 
   /* =======================================================
      Token Storage
   ======================================================= */
 
-  const saveTokens = useCallback(
-    ({
-      access = "",
-      refresh = "",
-    } = {}) => {
-      if (access) {
-        storeAccessToken(
-          access
-        );
+  const saveTokens =
+    useCallback(
+      ({
+        access = "",
+        refresh = "",
+      } = {}) => {
 
-        setAccessToken(
-          access
-        );
-      }
+        if (access) {
+          storeAccessToken(
+            access
+          );
 
-      if (refresh) {
-        storeRefreshToken(
-          refresh
-        );
+          setAccessToken(
+            access
+          );
+        }
 
-        setRefreshToken(
-          refresh
-        );
-      }
-    },
-    []
-  );
+        if (refresh) {
+          storeRefreshToken(
+            refresh
+          );
+
+          setRefreshToken(
+            refresh
+          );
+        }
+      },
+      []
+    );
+
 
   /* =======================================================
      Clear Authentication
   ======================================================= */
 
   const clearAuthentication =
-    useCallback(() => {
-      const keysToRemove = [
-        ACCESS_TOKEN,
-        REFRESH_TOKEN,
-        USER_DATA,
+    useCallback(
+      () => {
 
-        "access",
-        "refresh",
+        const keysToRemove = [
+          ACCESS_TOKEN,
+          REFRESH_TOKEN,
+          USER_DATA,
 
-        "access_token",
-        "refresh_token",
+          "access",
+          "refresh",
 
-        "token",
-      ];
+          "access_token",
+          "refresh_token",
 
-      keysToRemove.forEach(
-        (key) => {
-          localStorage.removeItem(
+          "token",
+        ];
+
+
+        keysToRemove.forEach(
+          (
             key
-          );
-        }
-      );
+          ) => {
+            localStorage.removeItem(
+              key
+            );
+          }
+        );
 
-      setUserState(null);
-      setAccessToken("");
-      setRefreshToken("");
-    }, []);
+
+        setUserState(
+          null
+        );
+
+        setAccessToken(
+          ""
+        );
+
+        setRefreshToken(
+          ""
+        );
+      },
+      []
+    );
+
 
   /* =======================================================
      Update Current User
@@ -254,257 +375,384 @@ export function AuthProvider({
 
   const updateCurrentUser =
     useCallback(
-      (nextUser) => {
+      (
+        nextUser
+      ) => {
         saveUser(
           nextUser
         );
       },
-      [saveUser]
+      [
+        saveUser,
+      ]
     );
+
 
   /* =======================================================
      Login Drawer
   ======================================================= */
 
   const openLogin =
-    useCallback(() => {
-      setIsLoginOpen(true);
-    }, []);
+    useCallback(
+      () => {
+        setIsLoginOpen(
+          true
+        );
+      },
+      []
+    );
+
 
   const closeLogin =
-    useCallback(() => {
-      setIsLoginOpen(false);
-    }, []);
+    useCallback(
+      () => {
+        setIsLoginOpen(
+          false
+        );
+      },
+      []
+    );
+
 
   /* =======================================================
      Load Existing Session
   ======================================================= */
 
-  useEffect(() => {
-    let isMounted = true;
+  useEffect(
+    () => {
 
-    const loadProfile =
-      async () => {
-        if (!accessToken) {
-          if (isMounted) {
-            setLoading(false);
-          }
+      let isMounted =
+        true;
 
-          return;
-        }
 
-        try {
-          const profile =
-            await fetchProfile();
+      const loadProfile =
+        async () => {
 
-          if (!isMounted) {
+          if (
+            !accessToken
+          ) {
+            if (
+              isMounted
+            ) {
+              setLoading(
+                false
+              );
+            }
+
             return;
           }
 
-          saveUser(
-            profile
-          );
-        } catch (error) {
-          console.error(
-            "Profile load error:",
-            error
-          );
 
-          if (
-            isMounted &&
-            (
-              error?.status === 401 ||
-              error?.status === 403
-            )
+          try {
+
+            const profile =
+              await fetchProfile();
+
+
+            if (
+              !isMounted
+            ) {
+              return;
+            }
+
+
+            saveUser(
+              profile
+            );
+
+          } catch (
+            error
           ) {
-            clearAuthentication();
+
+            console.error(
+              "Profile load error:",
+              error
+            );
+
+
+            if (
+              isMounted &&
+              (
+                error?.status ===
+                  401 ||
+                error?.status ===
+                  403
+              )
+            ) {
+              clearAuthentication();
+            }
+
+          } finally {
+
+            if (
+              isMounted
+            ) {
+              setLoading(
+                false
+              );
+            }
           }
-        } finally {
-          if (isMounted) {
-            setLoading(false);
-          }
-        }
+        };
+
+
+      loadProfile();
+
+
+      return () => {
+        isMounted =
+          false;
       };
 
-    loadProfile();
+    },
+    [
+      accessToken,
+      saveUser,
+      clearAuthentication,
+    ]
+  );
 
-    return () => {
-      isMounted = false;
-    };
-  }, [
-    accessToken,
-    saveUser,
-    clearAuthentication,
-  ]);
 
   /* =======================================================
      Login
   ======================================================= */
 
-  const login = useCallback(
-    async (
-      username,
-      password
-    ) => {
-      const data =
-        await loginUser({
-          username,
-          password,
-        });
+  const login =
+    useCallback(
+      async (
+        username,
+        password
+      ) => {
 
-      const access =
-        data?.access ||
-        data?.access_token ||
-        "";
+        const data =
+          await loginUser({
+            username,
+            password,
+          });
 
-      const refresh =
-        data?.refresh ||
-        data?.refresh_token ||
-        "";
 
-      if (!access) {
-        throw new Error(
-          "Access token login response me nahi mila."
-        );
-      }
+        const access =
+          data?.access ||
+          data?.access_token ||
+          "";
 
-      saveTokens({
-        access,
-        refresh,
-      });
 
-      let loggedInUser =
-        data?.user ||
-        null;
+        const refresh =
+          data?.refresh ||
+          data?.refresh_token ||
+          "";
 
-      if (!loggedInUser) {
-        try {
-          loggedInUser =
-            await fetchProfile();
-        } catch (profileError) {
-          console.error(
-            "Profile fetch after login failed:",
-            profileError
+
+        if (
+          !access
+        ) {
+          throw new Error(
+            "Access token login response me nahi mila."
           );
         }
-      }
 
-      saveUser(
-        loggedInUser
-      );
 
-      closeLogin();
+        saveTokens({
+          access,
+          refresh,
+        });
 
-      return {
-        ...data,
-        access,
-        refresh,
-        user: loggedInUser,
-      };
-    },
-    [
-      saveTokens,
-      saveUser,
-      closeLogin,
-    ]
-  );
+
+        let loggedInUser =
+          data?.user ||
+          null;
+
+
+        /*
+         * Login response user ko first use karenge.
+         *
+         * Agar backend login response me user nahi mila,
+         * then profile endpoint call hoga.
+         */
+        if (
+          !loggedInUser
+        ) {
+          try {
+
+            loggedInUser =
+              await fetchProfile();
+
+          } catch (
+            profileError
+          ) {
+
+            console.error(
+              "Profile fetch after login failed:",
+              profileError
+            );
+          }
+        }
+
+
+        saveUser(
+          loggedInUser
+        );
+
+
+        closeLogin();
+
+
+        return {
+          ...data,
+
+          access,
+          refresh,
+
+          user:
+            normalizeUser(
+              loggedInUser
+            ),
+        };
+      },
+      [
+        saveTokens,
+        saveUser,
+        closeLogin,
+      ]
+    );
+
 
   /* =======================================================
      Register
   ======================================================= */
 
-  const register = useCallback(
-    async (payload) => {
-      const data =
-        await registerUser(
-          payload
-        );
+  const register =
+    useCallback(
+      async (
+        payload
+      ) => {
 
-      const access =
-        data?.access ||
-        data?.access_token ||
-        "";
+        const data =
+          await registerUser(
+            payload
+          );
 
-      const refresh =
-        data?.refresh ||
-        data?.refresh_token ||
-        "";
 
-      if (!access) {
-        throw new Error(
-          "Access token register response me nahi mila."
-        );
-      }
+        const access =
+          data?.access ||
+          data?.access_token ||
+          "";
 
-      saveTokens({
-        access,
-        refresh,
-      });
 
-      let registeredUser =
-        data?.user ||
-        null;
+        const refresh =
+          data?.refresh ||
+          data?.refresh_token ||
+          "";
 
-      if (!registeredUser) {
-        try {
-          registeredUser =
-            await fetchProfile();
-        } catch (profileError) {
-          console.error(
-            "Profile fetch after register failed:",
-            profileError
+
+        if (
+          !access
+        ) {
+          throw new Error(
+            "Access token register response me nahi mila."
           );
         }
-      }
 
-      saveUser(
-        registeredUser
-      );
 
-      closeLogin();
+        saveTokens({
+          access,
+          refresh,
+        });
 
-      return {
-        ...data,
-        access,
-        refresh,
-        user: registeredUser,
-      };
-    },
-    [
-      saveTokens,
-      saveUser,
-      closeLogin,
-    ]
-  );
+
+        let registeredUser =
+          data?.user ||
+          null;
+
+
+        if (
+          !registeredUser
+        ) {
+          try {
+
+            registeredUser =
+              await fetchProfile();
+
+          } catch (
+            profileError
+          ) {
+
+            console.error(
+              "Profile fetch after register failed:",
+              profileError
+            );
+          }
+        }
+
+
+        saveUser(
+          registeredUser
+        );
+
+
+        closeLogin();
+
+
+        return {
+          ...data,
+
+          access,
+          refresh,
+
+          user:
+            normalizeUser(
+              registeredUser
+            ),
+        };
+      },
+      [
+        saveTokens,
+        saveUser,
+        closeLogin,
+      ]
+    );
+
 
   /* =======================================================
      Logout
   ======================================================= */
 
-  const logout = useCallback(
-    async () => {
-      try {
-        if (refreshToken) {
-          await logoutUser(
+  const logout =
+    useCallback(
+      async () => {
+
+        try {
+
+          if (
             refreshToken
-          );
-        }
-      } catch (error) {
-        console.error(
-          "Backend logout error:",
+          ) {
+            await logoutUser(
+              refreshToken
+            );
+          }
+
+        } catch (
           error
-        );
-      } finally {
-        clearAuthentication();
-        closeLogin();
-      }
-    },
-    [
-      refreshToken,
-      clearAuthentication,
-      closeLogin,
-    ]
-  );
+        ) {
+
+          console.error(
+            "Backend logout error:",
+            error
+          );
+
+        } finally {
+
+          clearAuthentication();
+
+          closeLogin();
+        }
+      },
+      [
+        refreshToken,
+        clearAuthentication,
+        closeLogin,
+      ]
+    );
+
 
   /* =======================================================
      Refresh User Profile
@@ -513,31 +761,48 @@ export function AuthProvider({
   const refreshCurrentUser =
     useCallback(
       async () => {
-        if (!accessToken) {
+
+        if (
+          !accessToken
+        ) {
           return null;
         }
 
+
         try {
+
           const profile =
             await fetchProfile();
+
 
           saveUser(
             profile
           );
 
-          return profile;
-        } catch (error) {
+
+          return normalizeUser(
+            profile
+          );
+
+        } catch (
+          error
+        ) {
+
           console.error(
             "Current user refresh error:",
             error
           );
 
+
           if (
-            error?.status === 401 ||
-            error?.status === 403
+            error?.status ===
+              401 ||
+            error?.status ===
+              403
           ) {
             clearAuthentication();
           }
+
 
           throw error;
         }
@@ -549,6 +814,7 @@ export function AuthProvider({
       ]
     );
 
+
   /* =======================================================
      Authentication Flags
   ======================================================= */
@@ -559,117 +825,184 @@ export function AuthProvider({
       user
     );
 
+
+  const normalizedRole =
+    String(
+      user?.role ||
+      ""
+    )
+      .trim()
+      .toLowerCase();
+
+
   const isStaff =
     Boolean(
-      user?.is_staff ||
-      user?.isStaff
+      user?.is_staff ===
+        true ||
+      user?.isStaff ===
+        true
     );
+
 
   const isSuperuser =
     Boolean(
-      user?.is_superuser ||
-      user?.isSuperuser
+      user?.is_superuser ===
+        true ||
+      user?.isSuperuser ===
+        true
     );
+
 
   const isAdmin =
     Boolean(
-      isStaff ||
       isSuperuser ||
-      user?.is_admin ||
-      user?.role === "admin"
+      isStaff ||
+      user?.is_admin ===
+        true ||
+      user?.isAdmin ===
+        true ||
+      normalizedRole ===
+        "admin" ||
+      normalizedRole ===
+        "administrator"
     );
+
 
   /* =======================================================
      Context Value
   ======================================================= */
 
-  const value = useMemo(
-    () => ({
-      /* User */
-      user,
-      setUser: saveUser,
-      updateCurrentUser,
-      refreshCurrentUser,
+  const value =
+    useMemo(
+      () => ({
+        /* User */
 
-      /* Loading */
-      loading,
+        user,
 
-      /* Tokens */
-      accessToken,
-      refreshToken,
+        setUser:
+          saveUser,
 
-      /* Authentication */
-      isAuthenticated,
+        updateCurrentUser,
 
-      /* Authorization */
-      isAdmin,
-      isStaff,
-      isSuperuser,
+        refreshCurrentUser,
 
-      /* Authentication Actions */
-      login,
-      register,
-      logout,
 
-      /* Login Drawer */
-      isLoginOpen,
-      openLogin,
-      closeLogin,
-    }),
-    [
-      user,
-      saveUser,
-      updateCurrentUser,
-      refreshCurrentUser,
+        /* Loading */
 
-      loading,
+        loading,
 
-      accessToken,
-      refreshToken,
 
-      isAuthenticated,
-      isAdmin,
-      isStaff,
-      isSuperuser,
+        /* Tokens */
 
-      login,
-      register,
-      logout,
+        accessToken,
 
-      isLoginOpen,
-      openLogin,
-      closeLogin,
-    ]
-  );
+        refreshToken,
+
+
+        /* Authentication */
+
+        isAuthenticated,
+
+
+        /* Authorization */
+
+        isAdmin,
+
+        isStaff,
+
+        isSuperuser,
+
+
+        /* Authentication Actions */
+
+        login,
+
+        register,
+
+        logout,
+
+
+        /* Login Drawer */
+
+        isLoginOpen,
+
+        openLogin,
+
+        closeLogin,
+      }),
+      [
+        user,
+
+        saveUser,
+
+        updateCurrentUser,
+
+        refreshCurrentUser,
+
+        loading,
+
+        accessToken,
+
+        refreshToken,
+
+        isAuthenticated,
+
+        isAdmin,
+
+        isStaff,
+
+        isSuperuser,
+
+        login,
+
+        register,
+
+        logout,
+
+        isLoginOpen,
+
+        openLogin,
+
+        closeLogin,
+      ]
+    );
+
 
   return (
     <AuthContext.Provider
-      value={value}
+      value={
+        value
+      }
     >
       {children}
     </AuthContext.Provider>
   );
 }
 
+
 /* =========================================================
    useAuth Hook
 ========================================================= */
 
 export function useAuth() {
+
   const context =
     useContext(
       AuthContext
     );
 
-  if (!context) {
+
+  if (
+    !context
+  ) {
     throw new Error(
       "useAuth must be used inside AuthProvider."
     );
   }
 
+
   return context;
 }
-
 
 
 export default AuthContext;

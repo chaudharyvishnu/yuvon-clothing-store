@@ -2,10 +2,17 @@ const RAW_API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   "http://127.0.0.1:8000/api";
 
+
 const API_BASE_URL =
-  String(RAW_API_BASE_URL)
+  String(
+    RAW_API_BASE_URL
+  )
     .trim()
-    .replace(/\/+$/, "");
+    .replace(
+      /\/+$/,
+      ""
+    );
+
 
 const ACCESS_TOKEN_KEY =
   "yuvon_access_token";
@@ -17,9 +24,9 @@ const USER_DATA_KEY =
   "yuvon_user";
 
 
-// ======================================
+// =========================================================
 // Local Storage Helpers
-// ======================================
+// =========================================================
 
 function getAccessToken() {
   return (
@@ -56,13 +63,39 @@ function getRefreshToken() {
 }
 
 
-function saveAccessToken(token) {
+function saveAccessToken(
+  token
+) {
   if (!token) {
     return;
   }
 
   localStorage.setItem(
     ACCESS_TOKEN_KEY,
+    token
+  );
+
+  localStorage.setItem(
+    "access",
+    token
+  );
+}
+
+
+function saveRefreshToken(
+  token
+) {
+  if (!token) {
+    return;
+  }
+
+  localStorage.setItem(
+    REFRESH_TOKEN_KEY,
+    token
+  );
+
+  localStorage.setItem(
+    "refresh",
     token
   );
 }
@@ -103,33 +136,78 @@ function clearStoredAuthentication() {
 }
 
 
-// ======================================
-// URL Helper
-// ======================================
+// =========================================================
+// URL Helpers
+// =========================================================
 
-function buildApiUrl(endpoint = "") {
+function buildApiUrl(
+  endpoint = ""
+) {
+  const endpointString =
+    String(
+      endpoint || ""
+    );
+
   const cleanEndpoint =
-    String(endpoint || "").startsWith("/")
-      ? String(endpoint)
-      : `/${String(endpoint || "")}`;
+    endpointString.startsWith("/")
+      ? endpointString
+      : `/${endpointString}`;
 
-  return `${API_BASE_URL}${cleanEndpoint}`;
+  return (
+    `${API_BASE_URL}${cleanEndpoint}`
+  );
 }
 
 
-// ======================================
-// Response Helpers
-// ======================================
+function createQueryString(
+  params = {}
+) {
+  const cleanParams =
+    Object.fromEntries(
+      Object.entries(
+        params || {}
+      ).filter(
+        (
+          [
+            ,
+            value,
+          ]
+        ) =>
+          value !==
+            undefined &&
+          value !==
+            null &&
+          value !==
+            ""
+      )
+    );
 
-async function parseResponse(response) {
-  if (response.status === 204) {
+  return new URLSearchParams(
+    cleanParams
+  ).toString();
+}
+
+
+// =========================================================
+// Response Helpers
+// =========================================================
+
+async function parseResponse(
+  response
+) {
+  if (
+    response.status ===
+    204
+  ) {
     return {};
   }
+
 
   const contentType =
     response.headers.get(
       "content-type"
     ) || "";
+
 
   if (
     contentType.includes(
@@ -138,17 +216,24 @@ async function parseResponse(response) {
   ) {
     return response
       .json()
-      .catch(() => ({}));
+      .catch(
+        () => ({})
+      );
   }
+
 
   const text =
     await response
       .text()
-      .catch(() => "");
+      .catch(
+        () => ""
+      );
+
 
   return text
     ? {
-        detail: text,
+        detail:
+          text,
       }
     : {};
 }
@@ -163,25 +248,37 @@ function createApiError(
     data?.message ||
     `API Error: ${response.status}`;
 
+
   if (
-    Array.isArray(message)
+    Array.isArray(
+      message
+    )
   ) {
     message =
-      message.join(" ");
+      message.join(
+        " "
+      );
   }
+
 
   if (
     typeof message ===
     "object"
   ) {
     message =
-      JSON.stringify(message);
+      JSON.stringify(
+        message
+      );
   }
+
 
   const error =
     new Error(
-      String(message)
+      String(
+        message
+      )
     );
+
 
   error.status =
     response.status;
@@ -189,23 +286,28 @@ function createApiError(
   error.data =
     data;
 
+
   return error;
 }
 
 
-// ======================================
+// =========================================================
 // Refresh Token Request
-// ======================================
+// =========================================================
 
 async function requestNewAccessToken() {
   const refreshToken =
     getRefreshToken();
 
-  if (!refreshToken) {
+
+  if (
+    !refreshToken
+  ) {
     throw new Error(
       "Refresh token is not available."
     );
   }
+
 
   const response =
     await fetch(
@@ -229,12 +331,16 @@ async function requestNewAccessToken() {
       }
     );
 
+
   const data =
     await parseResponse(
       response
     );
 
-  if (!response.ok) {
+
+  if (
+    !response.ok
+  ) {
     clearStoredAuthentication();
 
     throw createApiError(
@@ -243,7 +349,10 @@ async function requestNewAccessToken() {
     );
   }
 
-  if (!data.access) {
+
+  if (
+    !data?.access
+  ) {
     clearStoredAuthentication();
 
     throw new Error(
@@ -251,17 +360,28 @@ async function requestNewAccessToken() {
     );
   }
 
+
   saveAccessToken(
     data.access
   );
+
+
+  if (
+    data?.refresh
+  ) {
+    saveRefreshToken(
+      data.refresh
+    );
+  }
+
 
   return data.access;
 }
 
 
-// ======================================
+// =========================================================
 // Common API Request
-// ======================================
+// =========================================================
 
 async function apiRequest(
   endpoint,
@@ -271,11 +391,13 @@ async function apiRequest(
   const token =
     getAccessToken();
 
+
   const isFormData =
     typeof FormData !==
       "undefined" &&
     options.body instanceof
       FormData;
+
 
   const headers = {
     ...(
@@ -302,6 +424,28 @@ async function apiRequest(
     ),
   };
 
+
+  /*
+   * Important:
+   *
+   * Never manually set
+   * multipart/form-data for FormData.
+   *
+   * Browser automatically adds
+   * the correct multipart boundary.
+   */
+  if (
+    isFormData &&
+    headers[
+      "Content-Type"
+    ]
+  ) {
+    delete headers[
+      "Content-Type"
+    ];
+  }
+
+
   const response =
     await fetch(
       buildApiUrl(
@@ -309,17 +453,21 @@ async function apiRequest(
       ),
       {
         ...options,
+
         headers,
       }
     );
+
 
   const data =
     await parseResponse(
       response
     );
 
+
   if (
-    response.status === 401 &&
+    response.status ===
+      401 &&
     allowRefresh &&
     getRefreshToken() &&
     endpoint !==
@@ -328,6 +476,7 @@ async function apiRequest(
     try {
       const newAccessToken =
         await requestNewAccessToken();
+
 
       return apiRequest(
         endpoint,
@@ -355,20 +504,219 @@ async function apiRequest(
     }
   }
 
-  if (!response.ok) {
+
+  if (
+    !response.ok
+  ) {
     throw createApiError(
       response,
       data
     );
   }
 
+
   return data;
 }
 
 
-// ======================================
+// =========================================================
+// FormData Helpers
+// =========================================================
+
+function isFileValue(
+  value
+) {
+  return (
+    typeof File !==
+      "undefined" &&
+    value instanceof
+      File
+  );
+}
+
+
+function isBlobValue(
+  value
+) {
+  return (
+    typeof Blob !==
+      "undefined" &&
+    value instanceof
+      Blob
+  );
+}
+
+
+function appendFormDataValue(
+  formData,
+  key,
+  value
+) {
+  if (
+    value === undefined ||
+    value === null
+  ) {
+    return;
+  }
+
+
+  if (
+    Array.isArray(
+      value
+    )
+  ) {
+    value.forEach(
+      (
+        item
+      ) => {
+        if (
+          item === undefined ||
+          item === null
+        ) {
+          return;
+        }
+
+
+        if (
+          typeof item ===
+            "object" &&
+          !isFileValue(
+            item
+          ) &&
+          !isBlobValue(
+            item
+          )
+        ) {
+          formData.append(
+            key,
+            JSON.stringify(
+              item
+            )
+          );
+
+          return;
+        }
+
+
+        formData.append(
+          key,
+          item
+        );
+      }
+    );
+
+    return;
+  }
+
+
+  if (
+    typeof value ===
+      "boolean"
+  ) {
+    formData.append(
+      key,
+      value
+        ? "true"
+        : "false"
+    );
+
+    return;
+  }
+
+
+  if (
+    typeof value ===
+      "object" &&
+    !isFileValue(
+      value
+    ) &&
+    !isBlobValue(
+      value
+    )
+  ) {
+    formData.append(
+      key,
+      JSON.stringify(
+        value
+      )
+    );
+
+    return;
+  }
+
+
+  formData.append(
+    key,
+    value
+  );
+}
+
+
+function createFormDataFromObject(
+  payload = {}
+) {
+  if (
+    typeof FormData !==
+      "undefined" &&
+    payload instanceof
+      FormData
+  ) {
+    return payload;
+  }
+
+
+  const formData =
+    new FormData();
+
+
+  Object.entries(
+    payload || {}
+  ).forEach(
+    (
+      [
+        key,
+        value,
+      ]
+    ) => {
+      appendFormDataValue(
+        formData,
+        key,
+        value
+      );
+    }
+  );
+
+
+  return formData;
+}
+
+
+// =========================================================
+// API Body Helper
+// =========================================================
+
+function createApiBody(
+  payload
+) {
+  if (
+    typeof FormData !==
+      "undefined" &&
+    payload instanceof
+      FormData
+  ) {
+    return payload;
+  }
+
+
+  return JSON.stringify(
+    payload
+  );
+}
+
+
+// =========================================================
 // Authentication
-// ======================================
+// =========================================================
 
 export async function registerUser(
   payload
@@ -412,11 +760,14 @@ export async function refreshAccessToken(
   refreshToken =
     getRefreshToken()
 ) {
-  if (!refreshToken) {
+  if (
+    !refreshToken
+  ) {
     throw new Error(
       "Refresh token is not available."
     );
   }
+
 
   return apiRequest(
     "/accounts/token/refresh/",
@@ -439,7 +790,9 @@ export async function logoutUser(
   refreshToken =
     getRefreshToken()
 ) {
-  if (!refreshToken) {
+  if (
+    !refreshToken
+  ) {
     clearStoredAuthentication();
 
     return {
@@ -447,6 +800,7 @@ export async function logoutUser(
         "Local logout completed.",
     };
   }
+
 
   try {
     return await apiRequest(
@@ -480,29 +834,21 @@ export async function updateProfile(
   profileData
 ) {
   const hasImage =
+    typeof File !==
+      "undefined" &&
     profileData
       ?.profile_image instanceof
     File;
 
-  if (hasImage) {
-    const formData =
-      new FormData();
 
-    Object.entries(
-      profileData
-    ).forEach(
-      ([key, value]) => {
-        if (
-          value !== undefined &&
-          value !== null
-        ) {
-          formData.append(
-            key,
-            value
-          );
-        }
-      }
-    );
+  if (
+    hasImage
+  ) {
+    const formData =
+      createFormDataFromObject(
+        profileData
+      );
+
 
     return apiRequest(
       "/accounts/profile/update/",
@@ -515,6 +861,7 @@ export async function updateProfile(
       }
     );
   }
+
 
   return apiRequest(
     "/accounts/profile/update/",
@@ -558,31 +905,18 @@ export async function changePassword({
 }
 
 
-// ======================================
-// Products
-// ======================================
+// =========================================================
+// Public Products
+// =========================================================
 
 export async function fetchProducts(
   params = {}
 ) {
-  const cleanParams =
-    Object.fromEntries(
-      Object.entries(
-        params
-      ).filter(
-        ([, value]) =>
-          value !==
-            undefined &&
-          value !==
-            null &&
-          value !== ""
-      )
+  const query =
+    createQueryString(
+      params
     );
 
-  const query =
-    new URLSearchParams(
-      cleanParams
-    ).toString();
 
   return apiRequest(
     `/products/${
@@ -605,9 +939,9 @@ export async function fetchProductById(
 }
 
 
-// ======================================
+// =========================================================
 // Brands
-// ======================================
+// =========================================================
 
 export async function fetchBrands() {
   return apiRequest(
@@ -616,9 +950,9 @@ export async function fetchBrands() {
 }
 
 
-// ======================================
+// =========================================================
 // Categories
-// ======================================
+// =========================================================
 
 export async function fetchDepartments() {
   return apiRequest(
@@ -641,9 +975,9 @@ export async function fetchSubCategories() {
 }
 
 
-// ======================================
+// =========================================================
 // Homepage Collections
-// ======================================
+// =========================================================
 
 export async function fetchFeaturedProducts(
   limit = 4
@@ -717,9 +1051,9 @@ export async function fetchClearanceProducts(
 }
 
 
-// ======================================
-// Search
-// ======================================
+// =========================================================
+// Product Search
+// =========================================================
 
 export async function searchProducts(
   keyword
@@ -734,9 +1068,9 @@ export async function searchProducts(
 }
 
 
-// ======================================
+// =========================================================
 // Product Filters
-// ======================================
+// =========================================================
 
 export async function fetchProductsByDepartment(
   slug,
@@ -790,9 +1124,738 @@ export async function fetchProductsByBrand(
 }
 
 
-// ======================================
+// =========================================================
+// Admin Product Management
+// =========================================================
+
+export async function fetchAdminProducts(
+  params = {}
+) {
+  const query =
+    createQueryString(
+      params
+    );
+
+
+  return apiRequest(
+    `/products/admin/${
+      query
+        ? `?${query}`
+        : ""
+    }`
+  );
+}
+
+
+export async function fetchAdminProductDetail(
+  productId
+) {
+  if (
+    productId ===
+      undefined ||
+    productId ===
+      null ||
+    productId ===
+      ""
+  ) {
+    throw new Error(
+      "Product ID is required."
+    );
+  }
+
+
+  return apiRequest(
+    `/products/admin/${encodeURIComponent(
+      productId
+    )}/`
+  );
+}
+
+
+// Compatibility Alias
+export async function fetchAdminProductById(
+  productId
+) {
+  return fetchAdminProductDetail(
+    productId
+  );
+}
+
+
+// =========================================================
+// Admin Product Create
+// Supports JSON + FormData
+// =========================================================
+
+export async function createAdminProduct(
+  payload
+) {
+  if (
+    !payload
+  ) {
+    throw new Error(
+      "Product data is required."
+    );
+  }
+
+
+  return apiRequest(
+    "/products/admin/",
+    {
+      method:
+        "POST",
+
+      body:
+        createApiBody(
+          payload
+        ),
+    }
+  );
+}
+
+
+// =========================================================
+// Admin Product Update
+// Supports JSON + FormData
+// =========================================================
+
+export async function updateAdminProduct(
+  productId,
+  payload
+) {
+  if (
+    productId ===
+      undefined ||
+    productId ===
+      null ||
+    productId ===
+      ""
+  ) {
+    throw new Error(
+      "Product ID is required."
+    );
+  }
+
+
+  if (
+    !payload
+  ) {
+    throw new Error(
+      "Product data is required."
+    );
+  }
+
+
+  return apiRequest(
+    `/products/admin/${encodeURIComponent(
+      productId
+    )}/`,
+    {
+      method:
+        "PATCH",
+
+      body:
+        createApiBody(
+          payload
+        ),
+    }
+  );
+}
+
+
+export async function deleteAdminProduct(
+  productId
+) {
+  if (
+    productId ===
+      undefined ||
+    productId ===
+      null ||
+    productId ===
+      ""
+  ) {
+    throw new Error(
+      "Product ID is required."
+    );
+  }
+
+
+  return apiRequest(
+    `/products/admin/${encodeURIComponent(
+      productId
+    )}/`,
+    {
+      method:
+        "DELETE",
+    }
+  );
+}
+
+
+// =========================================================
+// Admin Product Variants
+// =========================================================
+
+export async function fetchAdminProductVariants(
+  params = {}
+) {
+  /*
+   * Supported:
+   *
+   * fetchAdminProductVariants()
+   *
+   * fetchAdminProductVariants({
+   *   product: 3,
+   * })
+   *
+   * fetchAdminProductVariants(3)
+   */
+
+  let normalizedParams =
+    params;
+
+
+  if (
+    typeof params ===
+      "string" ||
+    typeof params ===
+      "number"
+  ) {
+    normalizedParams = {
+      product:
+        params,
+    };
+  }
+
+
+  const query =
+    createQueryString(
+      normalizedParams
+    );
+
+
+  return apiRequest(
+    `/products/admin/variants/${
+      query
+        ? `?${query}`
+        : ""
+    }`
+  );
+}
+
+
+export async function fetchAdminProductVariantDetail(
+  variantId
+) {
+  if (
+    variantId ===
+      undefined ||
+    variantId ===
+      null ||
+    variantId ===
+      ""
+  ) {
+    throw new Error(
+      "Variant ID is required."
+    );
+  }
+
+
+  return apiRequest(
+    `/products/admin/variants/${encodeURIComponent(
+      variantId
+    )}/`
+  );
+}
+
+
+export async function createAdminProductVariant(
+  payload
+) {
+  if (
+    !payload
+  ) {
+    throw new Error(
+      "Variant data is required."
+    );
+  }
+
+
+  return apiRequest(
+    "/products/admin/variants/",
+    {
+      method:
+        "POST",
+
+      body:
+        JSON.stringify(
+          payload
+        ),
+    }
+  );
+}
+
+
+export async function updateAdminProductVariant(
+  variantId,
+  payload
+) {
+  if (
+    variantId ===
+      undefined ||
+    variantId ===
+      null ||
+    variantId ===
+      ""
+  ) {
+    throw new Error(
+      "Variant ID is required."
+    );
+  }
+
+
+  if (
+    !payload
+  ) {
+    throw new Error(
+      "Variant data is required."
+    );
+  }
+
+
+  return apiRequest(
+    `/products/admin/variants/${encodeURIComponent(
+      variantId
+    )}/`,
+    {
+      method:
+        "PATCH",
+
+      body:
+        JSON.stringify(
+          payload
+        ),
+    }
+  );
+}
+
+
+export async function deleteAdminProductVariant(
+  variantId
+) {
+  if (
+    variantId ===
+      undefined ||
+    variantId ===
+      null ||
+    variantId ===
+      ""
+  ) {
+    throw new Error(
+      "Variant ID is required."
+    );
+  }
+
+
+  return apiRequest(
+    `/products/admin/variants/${encodeURIComponent(
+      variantId
+    )}/`,
+    {
+      method:
+        "DELETE",
+    }
+  );
+}
+
+
+// =========================================================
+// Admin Product Images
+// =========================================================
+
+export async function fetchAdminProductImages(
+  params = {}
+) {
+  /*
+   * Supported:
+   *
+   * fetchAdminProductImages()
+   *
+   * fetchAdminProductImages({
+   *   product: 3,
+   * })
+   *
+   * fetchAdminProductImages(3)
+   */
+
+  let normalizedParams =
+    params;
+
+
+  if (
+    typeof params ===
+      "string" ||
+    typeof params ===
+      "number"
+  ) {
+    normalizedParams = {
+      product:
+        params,
+    };
+  }
+
+
+  const query =
+    createQueryString(
+      normalizedParams
+    );
+
+
+  return apiRequest(
+    `/products/admin/images/${
+      query
+        ? `?${query}`
+        : ""
+    }`
+  );
+}
+
+
+export async function fetchAdminProductImageDetail(
+  imageId
+) {
+  if (
+    imageId ===
+      undefined ||
+    imageId ===
+      null ||
+    imageId ===
+      ""
+  ) {
+    throw new Error(
+      "Image ID is required."
+    );
+  }
+
+
+  return apiRequest(
+    `/products/admin/images/${encodeURIComponent(
+      imageId
+    )}/`
+  );
+}
+
+
+export async function createAdminProductImage(
+  payload
+) {
+  if (
+    !payload
+  ) {
+    throw new Error(
+      "Image data is required."
+    );
+  }
+
+
+  const formData =
+    createFormDataFromObject(
+      payload
+    );
+
+
+  return apiRequest(
+    "/products/admin/images/",
+    {
+      method:
+        "POST",
+
+      body:
+        formData,
+    }
+  );
+}
+
+
+export async function updateAdminProductImage(
+  imageId,
+  payload
+) {
+  if (
+    imageId ===
+      undefined ||
+    imageId ===
+      null ||
+    imageId ===
+      ""
+  ) {
+    throw new Error(
+      "Image ID is required."
+    );
+  }
+
+
+  if (
+    !payload
+  ) {
+    throw new Error(
+      "Image data is required."
+    );
+  }
+
+
+  const formData =
+    createFormDataFromObject(
+      payload
+    );
+
+
+  return apiRequest(
+    `/products/admin/images/${encodeURIComponent(
+      imageId
+    )}/`,
+    {
+      method:
+        "PATCH",
+
+      body:
+        formData,
+    }
+  );
+}
+
+
+export async function deleteAdminProductImage(
+  imageId
+) {
+  if (
+    imageId ===
+      undefined ||
+    imageId ===
+      null ||
+    imageId ===
+      ""
+  ) {
+    throw new Error(
+      "Image ID is required."
+    );
+  }
+
+
+  return apiRequest(
+    `/products/admin/images/${encodeURIComponent(
+      imageId
+    )}/`,
+    {
+      method:
+        "DELETE",
+    }
+  );
+}
+
+
+// =========================================================
+// Admin Bulk Product Upload
+// Excel / XLSX
+//
+// Backend expected field:
+// excel_file
+//
+// Endpoint:
+// POST /api/products/admin/bulk-upload/
+// =========================================================
+
+export async function bulkUploadAdminProducts(
+  file
+) {
+  if (
+    !file
+  ) {
+    throw new Error(
+      "Product Excel file is required."
+    );
+  }
+
+
+  const formData =
+    new FormData();
+
+
+  formData.append(
+    "excel_file",
+    file
+  );
+
+
+  return apiRequest(
+    "/products/admin/bulk-upload/",
+    {
+      method:
+        "POST",
+
+      body:
+        formData,
+    }
+  );
+}
+
+
+// Compatibility Alias
+export async function uploadAdminProductsExcel(
+  file
+) {
+  return bulkUploadAdminProducts(
+    file
+  );
+}
+
+
+// =========================================================
+// Admin Bulk Variant Upload
+// Excel / XLSX
+//
+// Backend expected field:
+// excel_file
+//
+// Endpoint:
+// POST /api/products/admin/variants/bulk-upload/
+// =========================================================
+
+export async function bulkUploadAdminVariants(
+  file
+) {
+  if (
+    !file
+  ) {
+    throw new Error(
+      "Variant Excel file is required."
+    );
+  }
+
+
+  const formData =
+    new FormData();
+
+
+  formData.append(
+    "excel_file",
+    file
+  );
+
+
+  return apiRequest(
+    "/products/admin/variants/bulk-upload/",
+    {
+      method:
+        "POST",
+
+      body:
+        formData,
+    }
+  );
+}
+
+
+// Compatibility Alias
+export async function uploadAdminVariantsExcel(
+  file
+) {
+  return bulkUploadAdminVariants(
+    file
+  );
+}
+
+
+// =========================================================
+// Admin Bulk Product Image Upload
+// ZIP
+//
+// Backend expected field:
+// zip_file
+//
+// Endpoint:
+// POST /api/products/admin/images/bulk-upload/
+// =========================================================
+
+export async function bulkUploadAdminProductImages(
+  file
+) {
+  if (
+    !file
+  ) {
+    throw new Error(
+      "Product image ZIP file is required."
+    );
+  }
+
+
+  const formData =
+    new FormData();
+
+
+  formData.append(
+    "zip_file",
+    file
+  );
+
+
+  return apiRequest(
+    "/products/admin/images/bulk-upload/",
+    {
+      method:
+        "POST",
+
+      body:
+        formData,
+    }
+  );
+}
+
+
+// Compatibility Alias
+export async function uploadAdminProductImagesZip(
+  file
+) {
+  return bulkUploadAdminProductImages(
+    file
+  );
+}
+
+
+// =========================================================
+// Generic Admin Bulk Upload Helpers
+// =========================================================
+
+export async function adminBulkProductUpload(
+  file
+) {
+  return bulkUploadAdminProducts(
+    file
+  );
+}
+
+
+export async function adminBulkVariantUpload(
+  file
+) {
+  return bulkUploadAdminVariants(
+    file
+  );
+}
+
+
+export async function adminBulkImageUpload(
+  file
+) {
+  return bulkUploadAdminProductImages(
+    file
+  );
+}
+
+
+// =========================================================
 // Orders
-// ======================================
+// =========================================================
 
 export async function createOrder(
   payload
@@ -812,9 +1875,9 @@ export async function createOrder(
 }
 
 
-// ======================================
+// =========================================================
 // Razorpay Payments
-// ======================================
+// =========================================================
 
 export async function createRazorpayOrder(
   payload
@@ -908,6 +1971,10 @@ export async function reportRazorpayFailure({
 }
 
 
+// =========================================================
+// Customer Orders
+// =========================================================
+
 export async function fetchMyOrders() {
   return apiRequest(
     "/orders/my-orders/"
@@ -941,13 +2008,18 @@ export async function cancelOrder(
 }
 
 
+// =========================================================
+// Invoice Download
+// =========================================================
+
 export async function downloadInvoice(
   orderNumber
 ) {
-  const token =
+  let token =
     getAccessToken();
 
-  const response =
+
+  let response =
     await fetch(
       buildApiUrl(
         `/orders/my-orders/${encodeURIComponent(
@@ -971,11 +2043,44 @@ export async function downloadInvoice(
       }
     );
 
-  if (!response.ok) {
+
+  if (
+    response.status ===
+      401 &&
+    getRefreshToken()
+  ) {
+    token =
+      await requestNewAccessToken();
+
+
+    response =
+      await fetch(
+        buildApiUrl(
+          `/orders/my-orders/${encodeURIComponent(
+            orderNumber
+          )}/invoice/`
+        ),
+        {
+          method:
+            "GET",
+
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+          },
+        }
+      );
+  }
+
+
+  if (
+    !response.ok
+  ) {
     const data =
       await parseResponse(
         response
       );
+
 
     throw createApiError(
       response,
@@ -983,9 +2088,14 @@ export async function downloadInvoice(
     );
   }
 
+
   return response.blob();
 }
 
+
+// =========================================================
+// Guest Order Tracking
+// =========================================================
 
 export async function trackGuestOrder(
   orderNumber,
@@ -1016,9 +2126,9 @@ export async function trackGuestOrder(
 }
 
 
-// ======================================
+// =========================================================
 // Shipping Addresses
-// ======================================
+// =========================================================
 
 export async function fetchAddresses() {
   return apiRequest(
@@ -1081,9 +2191,9 @@ export async function deleteAddress(
 }
 
 
-// ======================================
+// =========================================================
 // Wishlist
-// ======================================
+// =========================================================
 
 export async function fetchWishlist() {
   return apiRequest(
@@ -1167,9 +2277,9 @@ export async function clearWishlist() {
 }
 
 
-// ======================================
+// =========================================================
 // Product Reviews
-// ======================================
+// =========================================================
 
 export async function fetchProductReviews(
   productId
@@ -1204,6 +2314,10 @@ export async function fetchReviewEligibility(
 }
 
 
+// =========================================================
+// Create Product Review
+// =========================================================
+
 export async function createReview({
   productId,
   orderItemId = null,
@@ -1215,12 +2329,14 @@ export async function createReview({
   const formData =
     new FormData();
 
+
   formData.append(
     "product",
     String(
       productId
     )
   );
+
 
   formData.append(
     "rating",
@@ -1229,17 +2345,28 @@ export async function createReview({
     )
   );
 
+
   formData.append(
     "title",
-    title.trim()
+    String(
+      title ||
+      ""
+    ).trim()
   );
+
 
   formData.append(
     "comment",
-    comment.trim()
+    String(
+      comment ||
+      ""
+    ).trim()
   );
 
-  if (orderItemId) {
+
+  if (
+    orderItemId
+  ) {
     formData.append(
       "order_item",
       String(
@@ -1248,12 +2375,16 @@ export async function createReview({
     );
   }
 
-  if (image) {
+
+  if (
+    image
+  ) {
     formData.append(
       "image",
       image
     );
   }
+
 
   return apiRequest(
     "/reviews/create/",
@@ -1286,6 +2417,10 @@ export async function fetchMyReview(
 }
 
 
+// =========================================================
+// Update Product Review
+// =========================================================
+
 export async function updateReview(
   reviewId,
   {
@@ -1299,9 +2434,12 @@ export async function updateReview(
   const formData =
     new FormData();
 
+
   if (
-    rating !== undefined &&
-    rating !== null
+    rating !==
+      undefined &&
+    rating !==
+      null
   ) {
     formData.append(
       "rating",
@@ -1311,37 +2449,54 @@ export async function updateReview(
     );
   }
 
+
   if (
-    title !== undefined
+    title !==
+    undefined
   ) {
     formData.append(
       "title",
-      title
+      String(
+        title ||
+        ""
+      )
     );
   }
 
+
   if (
-    comment !== undefined
+    comment !==
+    undefined
   ) {
     formData.append(
       "comment",
-      comment
+      String(
+        comment ||
+        ""
+      )
     );
   }
 
-  if (image) {
+
+  if (
+    image
+  ) {
     formData.append(
       "image",
       image
     );
   }
 
-  if (removeImage) {
+
+  if (
+    removeImage
+  ) {
     formData.append(
       "remove_image",
       "true"
     );
   }
+
 
   return apiRequest(
     `/reviews/my-reviews/${encodeURIComponent(
@@ -1388,31 +2543,18 @@ export async function toggleReviewHelpful(
 }
 
 
-// ======================================
+// =========================================================
 // Admin Orders
-// ======================================
+// =========================================================
 
 export async function fetchAdminOrders(
   params = {}
 ) {
-  const cleanParams =
-    Object.fromEntries(
-      Object.entries(
-        params
-      ).filter(
-        ([, value]) =>
-          value !==
-            undefined &&
-          value !==
-            null &&
-          value !== ""
-      )
+  const query =
+    createQueryString(
+      params
     );
 
-  const query =
-    new URLSearchParams(
-      cleanParams
-    ).toString();
 
   return apiRequest(
     `/orders/admin/orders/${
@@ -1485,13 +2627,14 @@ export async function fetchAdminOrderDashboard() {
 }
 
 
-// ======================================
+// =========================================================
 // Useful Exports
-// ======================================
+// =========================================================
 
 export {
   API_BASE_URL,
   buildApiUrl,
+  createQueryString,
   getAccessToken,
   getRefreshToken,
   clearStoredAuthentication,

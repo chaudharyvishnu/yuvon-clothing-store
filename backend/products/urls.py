@@ -1,12 +1,17 @@
 from django.urls import path
 
 from .views import (
+    AdminBulkProductImageUploadView,
+    AdminBulkProductUploadView,
+    AdminBulkVariantUploadView,
+
     AdminProductDetailView,
     AdminProductImageDetailView,
     AdminProductImageListCreateView,
     AdminProductListCreateView,
     AdminProductVariantDetailView,
     AdminProductVariantListCreateView,
+
     BrandListView,
     ProductDetailView,
     ProductListView,
@@ -29,10 +34,55 @@ urlpatterns = [
     ),
 
     # =====================================================
+    # Admin Bulk Upload APIs
+    # IMPORTANT:
+    # Keep these routes above admin/<int:id>/.
+    # =====================================================
+
+    # POST /api/products/admin/bulk-upload/
+    #
+    # Multipart fields supported:
+    # file
+    # excel_file
+    #
+    # Used for bulk product Excel upload.
+    path(
+        "admin/bulk-upload/",
+        AdminBulkProductUploadView.as_view(),
+        name="admin-product-bulk-upload",
+    ),
+
+    # POST /api/products/admin/variants/bulk-upload/
+    #
+    # Multipart fields supported:
+    # file
+    # excel_file
+    #
+    # Used for bulk variant Excel upload.
+    path(
+        "admin/variants/bulk-upload/",
+        AdminBulkVariantUploadView.as_view(),
+        name="admin-variant-bulk-upload",
+    ),
+
+    # POST /api/products/admin/images/bulk-upload/
+    #
+    # Multipart fields supported:
+    # file
+    # zip_file
+    #
+    # Used for bulk product image ZIP upload.
+    path(
+        "admin/images/bulk-upload/",
+        AdminBulkProductImageUploadView.as_view(),
+        name="admin-image-bulk-upload",
+    ),
+
+    # =====================================================
     # Admin Product Management
     # IMPORTANT:
     # Keep admin routes ABOVE <int:id>/ so they are not
-    # confused with product detail routes.
+    # confused with public product detail routes.
     # =====================================================
 
     # GET  /api/products/admin/
@@ -41,16 +91,6 @@ urlpatterns = [
         "admin/",
         AdminProductListCreateView.as_view(),
         name="admin-product-list-create",
-    ),
-
-    # GET    /api/products/admin/1/
-    # PUT    /api/products/admin/1/
-    # PATCH  /api/products/admin/1/
-    # DELETE /api/products/admin/1/
-    path(
-        "admin/<int:id>/",
-        AdminProductDetailView.as_view(),
-        name="admin-product-detail",
     ),
 
     # =====================================================
@@ -104,6 +144,28 @@ urlpatterns = [
     ),
 
     # =====================================================
+    # Admin Product Detail
+    # IMPORTANT:
+    # Keep this AFTER fixed admin routes such as:
+    #
+    # admin/variants/
+    # admin/images/
+    # admin/bulk-upload/
+    #
+    # because this route accepts an integer product id.
+    # =====================================================
+
+    # GET    /api/products/admin/1/
+    # PUT    /api/products/admin/1/
+    # PATCH  /api/products/admin/1/
+    # DELETE /api/products/admin/1/
+    path(
+        "admin/<int:id>/",
+        AdminProductDetailView.as_view(),
+        name="admin-product-detail",
+    ),
+
+    # =====================================================
     # Public Product List
     # =====================================================
 
@@ -137,7 +199,6 @@ urlpatterns = [
     # ?ordering=oldest
     # ?ordering=rating
     # ?ordering=-rating
-    #
     path(
         "",
         ProductListView.as_view(),

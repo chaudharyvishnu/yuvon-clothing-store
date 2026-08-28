@@ -1,9 +1,24 @@
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
+from zipfile import BadZipFile, ZipFile
 
+from django.core.files.base import ContentFile
+from django.db import IntegrityError, transaction
 from django.db.models import Avg, Count, Prefetch, Q
+from django.utils.text import slugify
 
-from rest_framework import generics, permissions
+from openpyxl import load_workbook
 
+from rest_framework import generics, permissions, status
+from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from categories.models import (
+    Category,
+    Department,
+    SubCategory,
+)
 from reviews.models import Review
 
 from .models import (
@@ -32,7 +47,71 @@ TRUE_VALUES = {
     "true",
     "yes",
     "on",
+    "y",
 }
+
+FALSE_VALUES = {
+    "0",
+    "false",
+    "no",
+    "off",
+    "n",
+}
+
+
+def clean_text(value):
+    if value is None:
+        return ""
+
+    return str(value).strip()
+
+
+def clean_boolean(
+    value,
+    default=False,
+):
+    if value is None or value == "":
+        return default
+
+    normalized = (
+        str(value)
+        .strip()
+        .lower()
+    )
+
+    if normalized in TRUE_VALUES:
+        return True
+
+    if normalized in FALSE_VALUES:
+        return False
+
+    return default
+
+
+def clean_decimal(
+    value,
+    allow_empty=False,
+):
+    if value in {
+        None,
+        "",
+    }:
+        if allow_empty:
+            return None
+
+        return None
+
+    try:
+        return Decimal(
+            str(value)
+        )
+
+    except (
+        InvalidOperation,
+        TypeError,
+        ValueError,
+    ):
+        return None
 
 
 def query_bool(value):
@@ -48,22 +127,71 @@ def query_bool(value):
 
 
 def query_decimal(value):
-    if value in {
-        None,
-        "",
-    }:
-        return None
+    return clean_decimal(
+        value,
+        allow_empty=True,
+    )
 
-    try:
-        return Decimal(
-            str(value)
+
+def unique_slug_for_model(
+    model_class,
+    base_value,
+    exclude_id=None,
+):
+    base_slug = (
+        slugify(
+            base_value
         )
-    except (
-        InvalidOperation,
-        TypeError,
-        ValueError,
+        or "item"
+    )
+
+    candidate = base_slug
+    counter = 2
+
+    queryset = (
+        model_class.objects
+        .all()
+    )
+
+    if exclude_id:
+        queryset = (
+            queryset.exclude(
+                id=exclude_id
+            )
+        )
+
+    while queryset.filter(
+        slug=candidate
+    ).exists():
+        candidate = (
+            f"{base_slug}-{counter}"
+        )
+
+        counter += 1
+
+    return candidate
+
+
+def error_message(error):
+    if hasattr(
+        error,
+        "message_dict",
     ):
-        return None
+        return str(
+            error.message_dict
+        )
+
+    if hasattr(
+        error,
+        "messages",
+    ):
+        return " ".join(
+            str(message)
+            for message
+            in error.messages
+        )
+
+    return str(error)
 
 
 # =========================================================
@@ -870,3 +998,1493 @@ class AdminProductImageDetailView(
         )
         .all()
     )
+
+
+# =========================================================
+# Admin Bulk Product Upload
+# =========================================================
+
+class AdminBulkProductUploadView(
+    APIView
+):
+    """
+    Upload an Excel file from the React admin panel.
+
+    Accepted multipart field names:
+        file
+        excel_file
+
+    Required Excel columns:
+        sku
+        name
+        brand
+        department
+        category
+        price
+
+    Optional columns:
+        slug
+        subcategory
+        description
+        old_price
+        is_active
+        is_featured
+        is_best_seller
+        is_trending
+        is_new_arrival
+        is_clearance_sale
+        is_offer
+        meta_title
+        meta_description
+    """
+
+    permission_classes = (
+        IsAdminUserForProducts,
+    )
+
+    parser_classes = (
+        MultiPartParser,
+        FormParser,
+    )
+
+    def post(
+        self,
+        request,
+    ):
+        excel_file = (
+            request.FILES.get(
+                "file"
+            )
+            or request.FILES.get(
+                "excel_file"
+            )
+        )
+
+        if not excel_file:
+            return Response(
+                {
+                    "detail":
+                        "Excel file is required."
+                },
+                status=(
+                    status.HTTP_400_BAD_REQUEST
+                ),
+            )
+
+        try:
+            result = (
+                self.import_products(
+                    excel_file
+                )
+            )
+
+        except Exception as error:
+            return Response(
+                {
+                    "detail":
+                        error_message(
+                            error
+                        )
+                },
+                status=(
+                    status.HTTP_400_BAD_REQUEST
+                ),
+            )
+
+        return Response(
+            {
+                "message":
+                    "Bulk product upload completed.",
+                **result,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def import_products(
+        self,
+        excel_file,
+    ):
+        workbook = load_workbook(
+            excel_file,
+            read_only=True,
+            data_only=True,
+        )
+
+        try:
+            sheet = workbook.active
+
+            rows = sheet.iter_rows(
+                values_only=True
+            )
+
+            try:
+                raw_headers = next(
+                    rows
+                )
+
+            except StopIteration as error:
+                raise ValueError(
+                    "Excel file is empty."
+                ) from error
+
+            headers = [
+                clean_text(
+                    header
+                ).lower()
+                for header
+                in raw_headers
+            ]
+
+            required_headers = {
+                "sku",
+                "name",
+                "brand",
+                "department",
+                "category",
+                "price",
+            }
+
+            missing_headers = (
+                required_headers
+                .difference(
+                    headers
+                )
+            )
+
+            if missing_headers:
+                raise ValueError(
+                    (
+                        "Missing required columns: "
+                        + ", ".join(
+                            sorted(
+                                missing_headers
+                            )
+                        )
+                    )
+                )
+
+            created_count = 0
+            updated_count = 0
+            skipped_count = 0
+
+            errors = []
+
+            for (
+                row_number,
+                row,
+            ) in enumerate(
+                rows,
+                start=2,
+            ):
+                row_data = dict(
+                    zip(
+                        headers,
+                        row,
+                    )
+                )
+
+                if not any(
+                    value not in {
+                        None,
+                        "",
+                    }
+                    for value
+                    in row_data.values()
+                ):
+                    continue
+
+                try:
+                    with transaction.atomic():
+                        sku = clean_text(
+                            row_data.get(
+                                "sku"
+                            )
+                        )
+
+                        name = clean_text(
+                            row_data.get(
+                                "name"
+                            )
+                        )
+
+                        brand_name = clean_text(
+                            row_data.get(
+                                "brand"
+                            )
+                        )
+
+                        department_name = (
+                            clean_text(
+                                row_data.get(
+                                    "department"
+                                )
+                            )
+                        )
+
+                        category_name = (
+                            clean_text(
+                                row_data.get(
+                                    "category"
+                                )
+                            )
+                        )
+
+                        subcategory_name = (
+                            clean_text(
+                                row_data.get(
+                                    "subcategory"
+                                )
+                            )
+                        )
+
+                        if not all(
+                            (
+                                sku,
+                                name,
+                                brand_name,
+                                department_name,
+                                category_name,
+                            )
+                        ):
+                            raise ValueError(
+                                (
+                                    "Required values "
+                                    "are missing."
+                                )
+                            )
+
+                        price = clean_decimal(
+                            row_data.get(
+                                "price"
+                            )
+                        )
+
+                        if price is None:
+                            raise ValueError(
+                                "Invalid price."
+                            )
+
+                        if price < 0:
+                            raise ValueError(
+                                (
+                                    "Price cannot "
+                                    "be negative."
+                                )
+                            )
+
+                        old_price = (
+                            clean_decimal(
+                                row_data.get(
+                                    "old_price"
+                                ),
+                                allow_empty=True,
+                            )
+                        )
+
+                        if (
+                            old_price is not None
+                            and old_price < price
+                        ):
+                            raise ValueError(
+                                (
+                                    "Old price cannot "
+                                    "be lower than "
+                                    "selling price."
+                                )
+                            )
+
+                        # ---------------------------------
+                        # Brand
+                        # ---------------------------------
+
+                        brand = (
+                            Brand.objects
+                            .filter(
+                                name__iexact=(
+                                    brand_name
+                                )
+                            )
+                            .first()
+                        )
+
+                        if brand is None:
+                            brand = Brand(
+                                name=brand_name,
+                                slug=(
+                                    unique_slug_for_model(
+                                        Brand,
+                                        brand_name,
+                                    )
+                                ),
+                                is_active=True,
+                            )
+
+                            brand.full_clean()
+                            brand.save()
+
+                        # ---------------------------------
+                        # Department
+                        # ---------------------------------
+
+                        department = (
+                            Department.objects
+                            .filter(
+                                name__iexact=(
+                                    department_name
+                                )
+                            )
+                            .first()
+                        )
+
+                        if department is None:
+                            department = (
+                                Department(
+                                    name=(
+                                        department_name
+                                    ),
+                                    slug=(
+                                        unique_slug_for_model(
+                                            Department,
+                                            department_name,
+                                        )
+                                    ),
+                                    is_active=True,
+                                    show_in_navbar=True,
+                                )
+                            )
+
+                            department.full_clean()
+                            department.save()
+
+                        # ---------------------------------
+                        # Category
+                        # ---------------------------------
+
+                        category = (
+                            Category.objects
+                            .filter(
+                                department=(
+                                    department
+                                ),
+                                name__iexact=(
+                                    category_name
+                                ),
+                            )
+                            .first()
+                        )
+
+                        if category is None:
+                            category = Category(
+                                department=(
+                                    department
+                                ),
+                                name=(
+                                    category_name
+                                ),
+                                slug=(
+                                    unique_slug_for_model(
+                                        Category,
+                                        (
+                                            f"{department_name}-"
+                                            f"{category_name}"
+                                        ),
+                                    )
+                                ),
+                                is_active=True,
+                                show_in_navbar=True,
+                            )
+
+                            category.full_clean()
+                            category.save()
+
+                        # ---------------------------------
+                        # Subcategory
+                        # ---------------------------------
+
+                        subcategory = None
+
+                        if subcategory_name:
+                            subcategory = (
+                                SubCategory.objects
+                                .filter(
+                                    category=(
+                                        category
+                                    ),
+                                    name__iexact=(
+                                        subcategory_name
+                                    ),
+                                )
+                                .first()
+                            )
+
+                            if subcategory is None:
+                                subcategory = (
+                                    SubCategory(
+                                        category=(
+                                            category
+                                        ),
+                                        name=(
+                                            subcategory_name
+                                        ),
+                                        slug=(
+                                            unique_slug_for_model(
+                                                SubCategory,
+                                                (
+                                                    f"{department_name}-"
+                                                    f"{category_name}-"
+                                                    f"{subcategory_name}"
+                                                ),
+                                            )
+                                        ),
+                                        is_active=True,
+                                        show_in_navbar=True,
+                                    )
+                                )
+
+                                subcategory.full_clean()
+                                subcategory.save()
+
+                        # ---------------------------------
+                        # Product
+                        # ---------------------------------
+
+                        product = (
+                            Product.objects
+                            .filter(
+                                sku__iexact=sku
+                            )
+                            .first()
+                        )
+
+                        created = (
+                            product is None
+                        )
+
+                        if created:
+                            product = Product(
+                                sku=sku
+                            )
+
+                        supplied_slug = (
+                            clean_text(
+                                row_data.get(
+                                    "slug"
+                                )
+                            )
+                        )
+
+                        if supplied_slug:
+                            supplied_slug = (
+                                slugify(
+                                    supplied_slug
+                                )
+                            )
+
+                            slug_queryset = (
+                                Product.objects
+                                .filter(
+                                    slug=(
+                                        supplied_slug
+                                    )
+                                )
+                            )
+
+                            if product.pk:
+                                slug_queryset = (
+                                    slug_queryset
+                                    .exclude(
+                                        pk=product.pk
+                                    )
+                                )
+
+                            if slug_queryset.exists():
+                                raise ValueError(
+                                    (
+                                        "Product slug "
+                                        "already exists: "
+                                        f"{supplied_slug}"
+                                    )
+                                )
+
+                            product.slug = (
+                                supplied_slug
+                            )
+
+                        elif (
+                            created
+                            or not product.slug
+                        ):
+                            product.slug = (
+                                unique_slug_for_model(
+                                    Product,
+                                    (
+                                        f"{name}-{sku}"
+                                    ),
+                                    exclude_id=(
+                                        product.pk
+                                        if product.pk
+                                        else None
+                                    ),
+                                )
+                            )
+
+                        product.sku = sku
+                        product.name = name
+                        product.brand = brand
+
+                        product.department = (
+                            department
+                        )
+
+                        product.category = (
+                            category
+                        )
+
+                        product.subcategory = (
+                            subcategory
+                        )
+
+                        product.description = (
+                            clean_text(
+                                row_data.get(
+                                    "description"
+                                )
+                            )
+                        )
+
+                        product.price = price
+
+                        product.old_price = (
+                            old_price
+                        )
+
+                        product.is_active = (
+                            clean_boolean(
+                                row_data.get(
+                                    "is_active"
+                                ),
+                                default=True,
+                            )
+                        )
+
+                        product.is_featured = (
+                            clean_boolean(
+                                row_data.get(
+                                    "is_featured"
+                                )
+                            )
+                        )
+
+                        product.is_best_seller = (
+                            clean_boolean(
+                                row_data.get(
+                                    "is_best_seller"
+                                )
+                            )
+                        )
+
+                        product.is_trending = (
+                            clean_boolean(
+                                row_data.get(
+                                    "is_trending"
+                                )
+                            )
+                        )
+
+                        product.is_new_arrival = (
+                            clean_boolean(
+                                row_data.get(
+                                    "is_new_arrival"
+                                )
+                            )
+                        )
+
+                        product.is_clearance_sale = (
+                            clean_boolean(
+                                row_data.get(
+                                    "is_clearance_sale"
+                                )
+                            )
+                        )
+
+                        product.is_offer = (
+                            clean_boolean(
+                                row_data.get(
+                                    "is_offer"
+                                )
+                            )
+                        )
+
+                        product.meta_title = (
+                            clean_text(
+                                row_data.get(
+                                    "meta_title"
+                                )
+                            )
+                        )
+
+                        product.meta_description = (
+                            clean_text(
+                                row_data.get(
+                                    "meta_description"
+                                )
+                            )
+                        )
+
+                        product.full_clean()
+                        product.save()
+
+                        if created:
+                            created_count += 1
+
+                        else:
+                            updated_count += 1
+
+                except Exception as error:
+                    skipped_count += 1
+
+                    errors.append(
+                        {
+                            "row":
+                                row_number,
+                            "sku":
+                                clean_text(
+                                    row_data.get(
+                                        "sku"
+                                    )
+                                ),
+                            "error":
+                                error_message(
+                                    error
+                                ),
+                        }
+                    )
+
+            return {
+                "created":
+                    created_count,
+                "updated":
+                    updated_count,
+                "skipped":
+                    skipped_count,
+                "errors":
+                    errors[:100],
+            }
+
+        finally:
+            workbook.close()
+
+
+# =========================================================
+# Admin Bulk Product Variant Upload
+# =========================================================
+
+class AdminBulkVariantUploadView(
+    APIView
+):
+    """
+    Upload product variants through Excel.
+
+    Accepted multipart field names:
+        file
+        excel_file
+
+    Required columns:
+        product_sku
+        variant_sku
+        color
+        size
+        stock
+
+    Optional:
+        color_code
+        is_active
+    """
+
+    permission_classes = (
+        IsAdminUserForProducts,
+    )
+
+    parser_classes = (
+        MultiPartParser,
+        FormParser,
+    )
+
+    def post(
+        self,
+        request,
+    ):
+        excel_file = (
+            request.FILES.get(
+                "file"
+            )
+            or request.FILES.get(
+                "excel_file"
+            )
+        )
+
+        if not excel_file:
+            return Response(
+                {
+                    "detail":
+                        "Excel file is required."
+                },
+                status=(
+                    status.HTTP_400_BAD_REQUEST
+                ),
+            )
+
+        try:
+            result = (
+                self.import_variants(
+                    excel_file
+                )
+            )
+
+        except Exception as error:
+            return Response(
+                {
+                    "detail":
+                        error_message(
+                            error
+                        )
+                },
+                status=(
+                    status.HTTP_400_BAD_REQUEST
+                ),
+            )
+
+        return Response(
+            {
+                "message":
+                    "Bulk variant upload completed.",
+                **result,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def import_variants(
+        self,
+        excel_file,
+    ):
+        workbook = load_workbook(
+            excel_file,
+            read_only=True,
+            data_only=True,
+        )
+
+        try:
+            sheet = workbook.active
+
+            rows = sheet.iter_rows(
+                values_only=True
+            )
+
+            try:
+                raw_headers = next(
+                    rows
+                )
+
+            except StopIteration as error:
+                raise ValueError(
+                    "Excel file is empty."
+                ) from error
+
+            headers = [
+                clean_text(
+                    header
+                ).lower()
+                for header
+                in raw_headers
+            ]
+
+            required_headers = {
+                "product_sku",
+                "variant_sku",
+                "color",
+                "size",
+                "stock",
+            }
+
+            missing_headers = (
+                required_headers
+                .difference(
+                    headers
+                )
+            )
+
+            if missing_headers:
+                raise ValueError(
+                    (
+                        "Missing required columns: "
+                        + ", ".join(
+                            sorted(
+                                missing_headers
+                            )
+                        )
+                    )
+                )
+
+            created_count = 0
+            updated_count = 0
+            skipped_count = 0
+
+            errors = []
+
+            for (
+                row_number,
+                row,
+            ) in enumerate(
+                rows,
+                start=2,
+            ):
+                row_data = dict(
+                    zip(
+                        headers,
+                        row,
+                    )
+                )
+
+                if not any(
+                    value not in {
+                        None,
+                        "",
+                    }
+                    for value
+                    in row_data.values()
+                ):
+                    continue
+
+                try:
+                    with transaction.atomic():
+                        product_sku = (
+                            clean_text(
+                                row_data.get(
+                                    "product_sku"
+                                )
+                            )
+                        )
+
+                        variant_sku = (
+                            clean_text(
+                                row_data.get(
+                                    "variant_sku"
+                                )
+                            )
+                        )
+
+                        color = clean_text(
+                            row_data.get(
+                                "color"
+                            )
+                        )
+
+                        color_code = (
+                            clean_text(
+                                row_data.get(
+                                    "color_code"
+                                )
+                            )
+                        )
+
+                        size = clean_text(
+                            row_data.get(
+                                "size"
+                            )
+                        )
+
+                        if not all(
+                            (
+                                product_sku,
+                                variant_sku,
+                                color,
+                                size,
+                            )
+                        ):
+                            raise ValueError(
+                                (
+                                    "Required values "
+                                    "are missing."
+                                )
+                            )
+
+                        product = (
+                            Product.objects
+                            .filter(
+                                sku__iexact=(
+                                    product_sku
+                                )
+                            )
+                            .first()
+                        )
+
+                        if product is None:
+                            raise ValueError(
+                                (
+                                    "Product SKU "
+                                    f"{product_sku} "
+                                    "not found."
+                                )
+                            )
+
+                        stock_raw = (
+                            row_data.get(
+                                "stock"
+                            )
+                        )
+
+                        try:
+                            stock = int(
+                                stock_raw or 0
+                            )
+
+                        except (
+                            TypeError,
+                            ValueError,
+                        ) as error:
+                            raise ValueError(
+                                (
+                                    "Invalid stock "
+                                    "value."
+                                )
+                            ) from error
+
+                        if stock < 0:
+                            raise ValueError(
+                                (
+                                    "Stock cannot "
+                                    "be negative."
+                                )
+                            )
+
+                        is_active = (
+                            clean_boolean(
+                                row_data.get(
+                                    "is_active"
+                                ),
+                                default=True,
+                            )
+                        )
+
+                        # ---------------------------------
+                        # Prefer variant SKU
+                        # ---------------------------------
+
+                        variant = (
+                            ProductVariant.objects
+                            .filter(
+                                sku__iexact=(
+                                    variant_sku
+                                )
+                            )
+                            .first()
+                        )
+
+                        # ---------------------------------
+                        # Otherwise same product/color/size
+                        # ---------------------------------
+
+                        if variant is None:
+                            variant = (
+                                ProductVariant.objects
+                                .filter(
+                                    product=(
+                                        product
+                                    ),
+                                    color__iexact=(
+                                        color
+                                    ),
+                                    size__iexact=(
+                                        size
+                                    ),
+                                )
+                                .first()
+                            )
+
+                        created = (
+                            variant is None
+                        )
+
+                        if created:
+                            variant = (
+                                ProductVariant()
+                            )
+
+                        variant.product = (
+                            product
+                        )
+
+                        variant.sku = (
+                            variant_sku
+                        )
+
+                        variant.color = (
+                            color
+                        )
+
+                        variant.color_code = (
+                            color_code
+                        )
+
+                        variant.size = (
+                            size
+                        )
+
+                        variant.stock = (
+                            stock
+                        )
+
+                        variant.is_active = (
+                            is_active
+                        )
+
+                        variant.full_clean()
+                        variant.save()
+
+                        if created:
+                            created_count += 1
+
+                        else:
+                            updated_count += 1
+
+                except Exception as error:
+                    skipped_count += 1
+
+                    errors.append(
+                        {
+                            "row":
+                                row_number,
+                            "product_sku":
+                                clean_text(
+                                    row_data.get(
+                                        "product_sku"
+                                    )
+                                ),
+                            "variant_sku":
+                                clean_text(
+                                    row_data.get(
+                                        "variant_sku"
+                                    )
+                                ),
+                            "error":
+                                error_message(
+                                    error
+                                ),
+                        }
+                    )
+
+            return {
+                "created":
+                    created_count,
+                "updated":
+                    updated_count,
+                "skipped":
+                    skipped_count,
+                "errors":
+                    errors[:100],
+            }
+
+        finally:
+            workbook.close()
+
+
+# =========================================================
+# Admin Bulk Product Image ZIP Upload
+# =========================================================
+
+class AdminBulkProductImageUploadView(
+    APIView
+):
+    """
+    Upload product images using one ZIP file.
+
+    Accepted multipart fields:
+        file
+        zip_file
+
+    Naming convention:
+
+        SKU.jpg
+            -> Product main image
+
+        SKU_1.jpg
+            -> Gallery image order 1
+
+        SKU_2.jpg
+            -> Gallery image order 2
+
+    Supported:
+        jpg
+        jpeg
+        png
+        webp
+    """
+
+    permission_classes = (
+        IsAdminUserForProducts,
+    )
+
+    parser_classes = (
+        MultiPartParser,
+        FormParser,
+    )
+
+    def post(
+        self,
+        request,
+    ):
+        zip_file = (
+            request.FILES.get(
+                "file"
+            )
+            or request.FILES.get(
+                "zip_file"
+            )
+        )
+
+        if not zip_file:
+            return Response(
+                {
+                    "detail":
+                        "ZIP file is required."
+                },
+                status=(
+                    status.HTTP_400_BAD_REQUEST
+                ),
+            )
+
+        try:
+            result = (
+                self.import_images(
+                    zip_file
+                )
+            )
+
+        except Exception as error:
+            return Response(
+                {
+                    "detail":
+                        error_message(
+                            error
+                        )
+                },
+                status=(
+                    status.HTTP_400_BAD_REQUEST
+                ),
+            )
+
+        return Response(
+            {
+                "message":
+                    "Bulk image upload completed.",
+                **result,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @transaction.atomic
+    def import_images(
+        self,
+        zip_file,
+    ):
+        allowed_extensions = {
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".webp",
+        }
+
+        main_image_count = 0
+        gallery_image_count = 0
+        skipped_count = 0
+
+        errors = []
+
+        try:
+            archive = ZipFile(
+                zip_file
+            )
+
+        except BadZipFile as error:
+            raise ValueError(
+                (
+                    "Uploaded file is "
+                    "not a valid ZIP file."
+                )
+            ) from error
+
+        products_by_sku = {
+            product.sku
+            .strip()
+            .lower():
+                product
+            for product
+            in Product.objects.all()
+            if product.sku
+        }
+
+        try:
+            for zip_info in (
+                archive.infolist()
+            ):
+                if zip_info.is_dir():
+                    continue
+
+                original_name = (
+                    Path(
+                        zip_info.filename
+                    ).name
+                )
+
+                if not original_name:
+                    continue
+
+                if original_name.startswith(
+                    "."
+                ):
+                    continue
+
+                file_path = Path(
+                    original_name
+                )
+
+                extension = (
+                    file_path
+                    .suffix
+                    .lower()
+                )
+
+                if (
+                    extension
+                    not in allowed_extensions
+                ):
+                    skipped_count += 1
+
+                    errors.append(
+                        {
+                            "file":
+                                original_name,
+                            "error":
+                                (
+                                    "Unsupported image "
+                                    "file type."
+                                ),
+                        }
+                    )
+
+                    continue
+
+                file_stem = (
+                    file_path.stem
+                )
+
+                product = None
+                gallery_order = None
+
+                exact_sku = (
+                    file_stem.lower()
+                )
+
+                if (
+                    exact_sku
+                    in products_by_sku
+                ):
+                    product = (
+                        products_by_sku[
+                            exact_sku
+                        ]
+                    )
+
+                elif "_" in file_stem:
+                    (
+                        possible_sku,
+                        possible_order,
+                    ) = file_stem.rsplit(
+                        "_",
+                        1,
+                    )
+
+                    if (
+                        possible_order
+                        .isdigit()
+                        and (
+                            possible_sku
+                            .lower()
+                            in products_by_sku
+                        )
+                    ):
+                        product = (
+                            products_by_sku[
+                                possible_sku
+                                .lower()
+                            ]
+                        )
+
+                        gallery_order = (
+                            int(
+                                possible_order
+                            )
+                        )
+
+                if product is None:
+                    skipped_count += 1
+
+                    errors.append(
+                        {
+                            "file":
+                                original_name,
+                            "error":
+                                (
+                                    "Matching product "
+                                    "SKU not found."
+                                ),
+                        }
+                    )
+
+                    continue
+
+                try:
+                    image_bytes = (
+                        archive.read(
+                            zip_info
+                        )
+                    )
+
+                    if not image_bytes:
+                        raise ValueError(
+                            "Image file is empty."
+                        )
+
+                    image_content = (
+                        ContentFile(
+                            image_bytes
+                        )
+                    )
+
+                    # ---------------------------------
+                    # Main Image
+                    # ---------------------------------
+
+                    if gallery_order is None:
+                        if product.main_image:
+                            product.main_image.delete(
+                                save=False
+                            )
+
+                        product.main_image.save(
+                            original_name,
+                            image_content,
+                            save=True,
+                        )
+
+                        main_image_count += 1
+
+                    # ---------------------------------
+                    # Gallery Image
+                    # ---------------------------------
+
+                    else:
+                        existing_image = (
+                            ProductImage.objects
+                            .filter(
+                                product=(
+                                    product
+                                ),
+                                order=(
+                                    gallery_order
+                                ),
+                            )
+                            .first()
+                        )
+
+                        if existing_image:
+                            if (
+                                existing_image
+                                .image
+                            ):
+                                (
+                                    existing_image
+                                    .image
+                                    .delete(
+                                        save=False
+                                    )
+                                )
+
+                            existing_image.alt_text = (
+                                product.name
+                            )
+
+                            existing_image.order = (
+                                gallery_order
+                            )
+
+                            (
+                                existing_image
+                                .image
+                                .save(
+                                    original_name,
+                                    image_content,
+                                    save=False,
+                                )
+                            )
+
+                            existing_image.full_clean()
+                            existing_image.save()
+
+                        else:
+                            gallery_image = (
+                                ProductImage(
+                                    product=(
+                                        product
+                                    ),
+                                    alt_text=(
+                                        product.name
+                                    ),
+                                    order=(
+                                        gallery_order
+                                    ),
+                                )
+                            )
+
+                            (
+                                gallery_image
+                                .image
+                                .save(
+                                    original_name,
+                                    image_content,
+                                    save=False,
+                                )
+                            )
+
+                            gallery_image.full_clean()
+                            gallery_image.save()
+
+                        gallery_image_count += 1
+
+                except Exception as error:
+                    skipped_count += 1
+
+                    errors.append(
+                        {
+                            "file":
+                                original_name,
+                            "error":
+                                error_message(
+                                    error
+                                ),
+                        }
+                    )
+
+        finally:
+            archive.close()
+
+        return {
+            "main_images":
+                main_image_count,
+            "gallery_images":
+                gallery_image_count,
+            "skipped":
+                skipped_count,
+            "errors":
+                errors[:100],
+        }

@@ -45,6 +45,10 @@ import Dashboard from "./pages/admin/Dashboard";
 import AdminOrders from "./components/admin/AdminOrders";
 import AdminOrderDetails from "./components/admin/AdminOrderDetails";
 
+import AdminProducts from "./components/admin/AdminProducts";
+import AdminProductForm from "./components/admin/AdminProductForm";
+import AdminBulkUpload from "./components/admin/AdminBulkUpload";
+
 import {
   CartProvider,
 } from "./context/CartContext";
@@ -60,34 +64,63 @@ import {
 import CartDrawer from "./components/cart/CartDrawer";
 import LoginDrawer from "./components/auth/LoginDrawer";
 
+
 function App() {
   return (
     <AuthProvider>
       <CartProvider>
         <WishlistProvider>
+
+          {/* ==========================================
+              Global Layout
+          ========================================== */}
+
           <Navbar />
 
           <CartDrawer />
 
           <LoginDrawer />
 
+
+          {/* ==========================================
+              Application Routes
+          ========================================== */}
+
           <Routes>
+
+            {/* ==========================================
+                Home
+            ========================================== */}
+
             <Route
               path="/"
               element={
                 <>
                   <Hero />
+
                   <HomeNewArrivals />
+
                   <FeaturedProducts />
+
                   <TrendingProducts />
+
                   <BestSellerProducts />
+
                   <OfferProducts />
+
                   <ClearanceProducts />
+
                   <MediaShowcase />
+
                   <Testimonials />
                 </>
               }
             />
+
+
+            {/* ==========================================
+                Store
+            ========================================== */}
 
             <Route
               path="/shop"
@@ -96,6 +129,7 @@ function App() {
               }
             />
 
+
             <Route
               path="/product/:id"
               element={
@@ -103,12 +137,18 @@ function App() {
               }
             />
 
+
             <Route
               path="/wishlist"
               element={
                 <Wishlist />
               }
             />
+
+
+            {/* ==========================================
+                Checkout
+            ========================================== */}
 
             <Route
               path="/checkout"
@@ -119,6 +159,11 @@ function App() {
               }
             />
 
+
+            {/* ==========================================
+                Customer Account
+            ========================================== */}
+
             <Route
               path="/profile"
               element={
@@ -127,6 +172,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
 
             <Route
               path="/my-orders"
@@ -137,6 +183,7 @@ function App() {
               }
             />
 
+
             <Route
               path="/my-orders/:orderNumber"
               element={
@@ -145,6 +192,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
 
             <Route
               path="/my-reviews"
@@ -155,6 +203,7 @@ function App() {
               }
             />
 
+
             <Route
               path="/saved-addresses"
               element={
@@ -163,6 +212,11 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
+
+            {/* ==========================================
+                Admin Dashboard
+            ========================================== */}
 
             <Route
               path="/admin/dashboard"
@@ -173,6 +227,11 @@ function App() {
               }
             />
 
+
+            {/* ==========================================
+                Admin Orders
+            ========================================== */}
+
             <Route
               path="/admin/orders"
               element={
@@ -181,6 +240,7 @@ function App() {
                 </AdminRoute>
               }
             />
+
 
             <Route
               path="/admin/orders/:orderNumber"
@@ -191,12 +251,80 @@ function App() {
               }
             />
 
+
+            {/* ==========================================
+                Admin Products
+            ========================================== */}
+
+            <Route
+              path="/admin/products"
+              element={
+                <AdminRoute>
+                  <AdminProducts />
+                </AdminRoute>
+              }
+            />
+
+
+            {/* ==========================================
+                Admin Bulk Product Upload
+
+                IMPORTANT:
+                Keep this route ABOVE /admin/products/:id
+                so "bulk-upload" is not treated as an ID.
+            ========================================== */}
+
+            <Route
+              path="/admin/products/bulk-upload"
+              element={
+                <AdminRoute>
+                  <AdminBulkUpload />
+                </AdminRoute>
+              }
+            />
+
+
+            {/* ==========================================
+                Admin Add Product
+            ========================================== */}
+
+            <Route
+              path="/admin/products/new"
+              element={
+                <AdminRoute>
+                  <AdminProductForm />
+                </AdminRoute>
+              }
+            />
+
+
+            {/* ==========================================
+                Admin Edit Product
+
+                Keep dynamic :id route AFTER fixed routes.
+            ========================================== */}
+
+            <Route
+              path="/admin/products/:id"
+              element={
+                <AdminRoute>
+                  <AdminProductForm />
+                </AdminRoute>
+              }
+            />
+
+
+            {/* ==========================================
+                Information Pages
+            ========================================== */}
+
             <Route
               path="/about-us"
               element={
                 <AboutUs />
               }
             />
+
 
             <Route
               path="/privacy-policy"
@@ -205,12 +333,18 @@ function App() {
               }
             />
 
+
             <Route
               path="/shipping-policy"
               element={
                 <ShippingPolicy />
               }
             />
+
+
+            {/* ==========================================
+                Shopping Collections
+            ========================================== */}
 
             <Route
               path="/new-arrivals"
@@ -219,12 +353,14 @@ function App() {
               }
             />
 
+
             <Route
               path="/offers"
               element={
                 <Offers />
               }
             />
+
 
             <Route
               path="/clearance-sale"
@@ -233,12 +369,18 @@ function App() {
               }
             />
 
+
+            {/* ==========================================
+                Support
+            ========================================== */}
+
             <Route
               path="/support"
               element={
                 <Support />
               }
             />
+
 
             <Route
               path="/track-order"
@@ -247,12 +389,14 @@ function App() {
               }
             />
 
+
             <Route
               path="/join-yuvon"
               element={
                 <JoinYuvon />
               }
             />
+
 
             <Route
               path="/return-exchange"
@@ -261,34 +405,90 @@ function App() {
               }
             />
 
+
+            {/* ==========================================
+                404
+            ========================================== */}
+
             <Route
               path="*"
               element={
-                <div className="flex min-h-screen flex-col items-center justify-center bg-gray-100 px-6 text-center">
-                  <h1 className="text-7xl font-bold text-blue-600">
+                <div
+                  className="
+                    flex
+                    min-h-screen
+                    flex-col
+                    items-center
+                    justify-center
+                    bg-gray-100
+                    px-6
+                    text-center
+                  "
+                >
+
+                  <h1
+                    className="
+                      text-7xl
+                      font-bold
+                      text-blue-600
+                    "
+                  >
                     404
                   </h1>
 
-                  <p className="mt-4 text-2xl font-semibold text-gray-700">
+
+                  <p
+                    className="
+                      mt-4
+                      text-2xl
+                      font-semibold
+                      text-gray-700
+                    "
+                  >
                     Page Not Found
                   </p>
 
-                  <p className="mt-2 text-gray-500">
-                    Sorry, the page you are looking for doesn't exist.
+
+                  <p
+                    className="
+                      mt-2
+                      text-gray-500
+                    "
+                  >
+                    Sorry, the page you are looking for
+                    doesn't exist.
                   </p>
+
 
                   <Link
                     to="/"
-                    className="mt-6 rounded-lg bg-blue-600 px-6 py-3 text-white transition hover:bg-blue-700"
+                    className="
+                      mt-6
+                      rounded-lg
+                      bg-blue-600
+                      px-6
+                      py-3
+                      text-white
+                      transition
+                      hover:bg-blue-700
+                    "
                   >
                     Back to Home
                   </Link>
+
                 </div>
               }
             />
+
           </Routes>
 
+
+          {/* ==========================================
+              Global Footer
+          ========================================== */}
+
           <Footer />
+
         </WishlistProvider>
       </CartProvider>
     </AuthProvider>
