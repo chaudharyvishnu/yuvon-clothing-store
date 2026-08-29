@@ -36,17 +36,13 @@ def env_bool(
     Convert common environment values to bool.
     """
 
-    value = os.getenv(
-        name
-    )
+    value = os.getenv(name)
 
     if value is None:
         return default
 
     return (
-        value
-        .strip()
-        .lower()
+        value.strip().lower()
         in {
             "1",
             "true",
@@ -86,9 +82,7 @@ def env_int(
         return int(
             os.getenv(
                 name,
-                str(
-                    default
-                ),
+                str(default),
             )
         )
 
@@ -96,9 +90,7 @@ def env_int(
         TypeError,
         ValueError,
     ):
-        return int(
-            default
-        )
+        return int(default)
 
 
 # =========================================================
@@ -221,6 +213,117 @@ if not DEBUG:
 
 
 # =========================================================
+# Cloudinary Configuration
+# =========================================================
+
+CLOUDINARY_CLOUD_NAME = os.getenv(
+    "CLOUDINARY_CLOUD_NAME",
+    "",
+).strip()
+
+
+CLOUDINARY_API_KEY = os.getenv(
+    "CLOUDINARY_API_KEY",
+    "",
+).strip()
+
+
+CLOUDINARY_API_SECRET = os.getenv(
+    "CLOUDINARY_API_SECRET",
+    "",
+).strip()
+
+
+CLOUDINARY_URL = os.getenv(
+    "CLOUDINARY_URL",
+    "",
+).strip()
+
+
+CLOUDINARY_SEPARATE_CREDENTIALS_CONFIGURED = all(
+    [
+        CLOUDINARY_CLOUD_NAME,
+        CLOUDINARY_API_KEY,
+        CLOUDINARY_API_SECRET,
+    ]
+)
+
+
+CLOUDINARY_CONFIGURED = bool(
+    CLOUDINARY_URL
+    or CLOUDINARY_SEPARATE_CREDENTIALS_CONFIGURED
+)
+
+
+# ---------------------------------------------------------
+# Cloudinary usage rule
+# ---------------------------------------------------------
+#
+# Local development:
+#     Default = False
+#
+# Production:
+#     Default = True only when Cloudinary credentials exist.
+#
+# You can explicitly override using:
+#
+# USE_CLOUDINARY=True
+# USE_CLOUDINARY=False
+#
+# ---------------------------------------------------------
+
+USE_CLOUDINARY = env_bool(
+    "USE_CLOUDINARY",
+    default=(
+        not DEBUG
+        and CLOUDINARY_CONFIGURED
+    ),
+)
+
+
+if (
+    USE_CLOUDINARY
+    and not CLOUDINARY_CONFIGURED
+):
+    raise ImproperlyConfigured(
+        "USE_CLOUDINARY=True but Cloudinary credentials "
+        "are not configured. Configure CLOUDINARY_URL or "
+        "CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and "
+        "CLOUDINARY_API_SECRET."
+    )
+
+
+# ---------------------------------------------------------
+# django-cloudinary-storage configuration
+# ---------------------------------------------------------
+
+CLOUDINARY_STORAGE = {
+    "SECURE": True,
+}
+
+
+if CLOUDINARY_CLOUD_NAME:
+
+    CLOUDINARY_STORAGE[
+        "CLOUD_NAME"
+    ] = CLOUDINARY_CLOUD_NAME
+
+
+if CLOUDINARY_API_KEY:
+
+    CLOUDINARY_STORAGE[
+        "API_KEY"
+    ] = CLOUDINARY_API_KEY
+
+
+if CLOUDINARY_API_SECRET:
+
+    CLOUDINARY_STORAGE[
+        "API_SECRET"
+    ] = CLOUDINARY_API_SECRET
+
+
+# =========================================================
 # Applications
 # =========================================================
 
@@ -232,6 +335,10 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
+
+    # Cloudinary storage should be loaded before staticfiles
+    "cloudinary_storage",
+
     "django.contrib.staticfiles",
 
     # Third Party
@@ -239,6 +346,9 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
+
+    # Cloudinary
+    "cloudinary",
 
     # Celery
     "django_celery_results",
@@ -319,8 +429,7 @@ TEMPLATES = [
         ),
 
         "DIRS": [
-            BASE_DIR /
-            "templates",
+            BASE_DIR / "templates",
         ],
 
         "APP_DIRS": True,
@@ -434,8 +543,7 @@ else:
                 "django.db.backends.sqlite3",
 
             "NAME":
-                BASE_DIR /
-                "db.sqlite3",
+                BASE_DIR / "db.sqlite3",
         }
     }
 
@@ -526,38 +634,6 @@ STATIC_ROOT = (
 
 
 # =========================================================
-# Storage Backends
-# =========================================================
-
-STORAGES = {
-
-    # -----------------------------------------------------
-    # Uploaded media files
-    # -----------------------------------------------------
-
-    "default": {
-
-        "BACKEND": (
-            "django.core.files.storage."
-            "FileSystemStorage"
-        ),
-    },
-
-    # -----------------------------------------------------
-    # Static files
-    # -----------------------------------------------------
-
-    "staticfiles": {
-
-        "BACKEND": (
-            "whitenoise.storage."
-            "CompressedManifestStaticFilesStorage"
-        ),
-    },
-}
-
-
-# =========================================================
 # Media Files
 # =========================================================
 
@@ -573,25 +649,88 @@ MEDIA_ROOT = (
 
 
 # =========================================================
+# Storage Backends
+# =========================================================
+#
+# IMPORTANT:
+#
+# Static files:
+#     Always WhiteNoise.
+#
+# Media:
+#
+#     USE_CLOUDINARY=True
+#         -> Cloudinary
+#
+#     USE_CLOUDINARY=False
+#         -> Local FileSystemStorage
+#
+# Therefore existing local development remains working,
+# while Railway can use persistent Cloudinary storage.
+# =========================================================
+
+if USE_CLOUDINARY:
+
+    STORAGES = {
+
+        "default": {
+
+            "BACKEND": (
+                "cloudinary_storage.storage."
+                "MediaCloudinaryStorage"
+            ),
+        },
+
+        "staticfiles": {
+
+            "BACKEND": (
+                "whitenoise.storage."
+                "CompressedManifestStaticFilesStorage"
+            ),
+        },
+    }
+
+
+else:
+
+    STORAGES = {
+
+        "default": {
+
+            "BACKEND": (
+                "django.core.files.storage."
+                "FileSystemStorage"
+            ),
+        },
+
+        "staticfiles": {
+
+            "BACKEND": (
+                "whitenoise.storage."
+                "CompressedManifestStaticFilesStorage"
+            ),
+        },
+    }
+
+
+# =========================================================
 # Local Media Serving
 # =========================================================
 #
-# DEBUG=True:
-#     Local Django development normally serves /media/.
+# Local filesystem media only.
 #
-# SERVE_MEDIA_LOCALLY=True:
-#     Allows urls.py to explicitly serve media even when
-#     DEBUG was accidentally disabled during local testing.
+# When Cloudinary is active we deliberately disable local
+# media serving because ImageField.url should come directly
+# from Cloudinary.
 #
-# Production:
-#     Set SERVE_MEDIA_LOCALLY=False.
-#     Production media should eventually use persistent
-#     storage such as Cloudinary / S3 / Railway volume.
 # =========================================================
 
-SERVE_MEDIA_LOCALLY = env_bool(
-    "SERVE_MEDIA_LOCALLY",
-    default=DEBUG,
+SERVE_MEDIA_LOCALLY = (
+    env_bool(
+        "SERVE_MEDIA_LOCALLY",
+        default=DEBUG,
+    )
+    and not USE_CLOUDINARY
 )
 
 
@@ -599,8 +738,7 @@ SERVE_MEDIA_LOCALLY = env_bool(
 # File Upload Limits
 # =========================================================
 #
-# Useful because admin bulk product images may be uploaded
-# as a ZIP file.
+# Bulk product images are uploaded as ZIP archives.
 # =========================================================
 
 DATA_UPLOAD_MAX_MEMORY_SIZE = env_int(
@@ -1350,8 +1488,38 @@ if DEBUG:
 
 
     print(
+        "USE CLOUDINARY:",
+        USE_CLOUDINARY,
+    )
+
+
+    print(
+        "CLOUDINARY CONFIGURED:",
+        CLOUDINARY_CONFIGURED,
+    )
+
+
+    print(
+        "CLOUDINARY CLOUD NAME:",
+        CLOUDINARY_CLOUD_NAME
+        if CLOUDINARY_CLOUD_NAME
+        else "Not configured",
+    )
+
+
+    print(
         "SERVE MEDIA LOCALLY:",
         SERVE_MEDIA_LOCALLY,
+    )
+
+
+    print(
+        "DEFAULT STORAGE:",
+        STORAGES[
+            "default"
+        ][
+            "BACKEND"
+        ],
     )
 
 
