@@ -32,10 +32,6 @@ def env_bool(
     name,
     default=False,
 ):
-    """
-    Convert common environment values to bool.
-    """
-
     value = os.getenv(name)
 
     if value is None:
@@ -56,10 +52,6 @@ def env_list(
     name,
     default="",
 ):
-    """
-    Convert comma-separated environment variable into list.
-    """
-
     return [
         item.strip()
         for item in os.getenv(
@@ -74,10 +66,6 @@ def env_int(
     name,
     default,
 ):
-    """
-    Convert environment variable into integer.
-    """
-
     try:
         return int(
             os.getenv(
@@ -112,13 +100,11 @@ SECRET_KEY = os.getenv(
 if not SECRET_KEY:
 
     if DEBUG:
-
         SECRET_KEY = (
             "django-insecure-local-development-key-change-me"
         )
 
     else:
-
         raise ImproperlyConfigured(
             "DJANGO_SECRET_KEY must be configured in production."
         )
@@ -182,13 +168,11 @@ if not DEBUG:
     )
 
     SESSION_COOKIE_SECURE = True
-
     CSRF_COOKIE_SECURE = True
 
     SESSION_COOKIE_HTTPONLY = True
 
     SESSION_COOKIE_SAMESITE = "Lax"
-
     CSRF_COOKIE_SAMESITE = "Lax"
 
     SECURE_HSTS_SECONDS = env_int(
@@ -255,23 +239,6 @@ CLOUDINARY_CONFIGURED = bool(
 )
 
 
-# ---------------------------------------------------------
-# Cloudinary usage rule
-# ---------------------------------------------------------
-#
-# Local development:
-#     Default = False
-#
-# Production:
-#     Default = True only when Cloudinary credentials exist.
-#
-# You can explicitly override using:
-#
-# USE_CLOUDINARY=True
-# USE_CLOUDINARY=False
-#
-# ---------------------------------------------------------
-
 USE_CLOUDINARY = env_bool(
     "USE_CLOUDINARY",
     default=(
@@ -287,15 +254,9 @@ if (
 ):
     raise ImproperlyConfigured(
         "USE_CLOUDINARY=True but Cloudinary credentials "
-        "are not configured. Configure CLOUDINARY_URL or "
-        "CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and "
-        "CLOUDINARY_API_SECRET."
+        "are not configured."
     )
 
-
-# ---------------------------------------------------------
-# django-cloudinary-storage configuration
-# ---------------------------------------------------------
 
 CLOUDINARY_STORAGE = {
     "SECURE": True,
@@ -303,21 +264,18 @@ CLOUDINARY_STORAGE = {
 
 
 if CLOUDINARY_CLOUD_NAME:
-
     CLOUDINARY_STORAGE[
         "CLOUD_NAME"
     ] = CLOUDINARY_CLOUD_NAME
 
 
 if CLOUDINARY_API_KEY:
-
     CLOUDINARY_STORAGE[
         "API_KEY"
     ] = CLOUDINARY_API_KEY
 
 
 if CLOUDINARY_API_SECRET:
-
     CLOUDINARY_STORAGE[
         "API_SECRET"
     ] = CLOUDINARY_API_SECRET
@@ -325,6 +283,16 @@ if CLOUDINARY_API_SECRET:
 
 # =========================================================
 # Applications
+# =========================================================
+#
+# IMPORTANT:
+#
+# Cloudinary is used only for uploaded MEDIA.
+#
+# Therefore django.contrib.staticfiles MUST appear before
+# cloudinary_storage so Django's normal collectstatic
+# command remains active.
+#
 # =========================================================
 
 INSTALLED_APPS = [
@@ -335,10 +303,6 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
-
-    # Cloudinary storage should be loaded before staticfiles
-    "cloudinary_storage",
-
     "django.contrib.staticfiles",
 
     # Third Party
@@ -347,7 +311,8 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
 
-    # Cloudinary
+    # Cloudinary - media only
+    "cloudinary_storage",
     "cloudinary",
 
     # Celery
@@ -389,7 +354,6 @@ MIDDLEWARE = [
 
 
 if USE_WHITENOISE:
-
     MIDDLEWARE.append(
         "whitenoise.middleware.WhiteNoiseMiddleware"
     )
@@ -603,15 +567,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # =========================================================
 
-LANGUAGE_CODE = (
-    "en-us"
-)
+LANGUAGE_CODE = "en-us"
 
-
-TIME_ZONE = (
-    "Asia/Kolkata"
-)
-
+TIME_ZONE = "Asia/Kolkata"
 
 USE_I18N = True
 
@@ -634,6 +592,21 @@ STATIC_ROOT = (
 
 
 # =========================================================
+# Legacy Static Compatibility
+# =========================================================
+#
+# Kept for django-cloudinary-storage 0.3.0 compatibility.
+# Actual Django 5 static storage is configured through
+# STORAGES below.
+# =========================================================
+
+STATICFILES_STORAGE = (
+    "whitenoise.storage."
+    "CompressedManifestStaticFilesStorage"
+)
+
+
+# =========================================================
 # Media Files
 # =========================================================
 
@@ -652,21 +625,12 @@ MEDIA_ROOT = (
 # Storage Backends
 # =========================================================
 #
-# IMPORTANT:
+# default:
+#     User uploaded media.
 #
-# Static files:
-#     Always WhiteNoise.
+# staticfiles:
+#     Django admin / DRF / application static assets.
 #
-# Media:
-#
-#     USE_CLOUDINARY=True
-#         -> Cloudinary
-#
-#     USE_CLOUDINARY=False
-#         -> Local FileSystemStorage
-#
-# Therefore existing local development remains working,
-# while Railway can use persistent Cloudinary storage.
 # =========================================================
 
 if USE_CLOUDINARY:
@@ -714,15 +678,26 @@ else:
 
 
 # =========================================================
-# Local Media Serving
+# WhiteNoise Missing File Compatibility
 # =========================================================
 #
-# Local filesystem media only.
+# The manifest storage can fail hard when an installed
+# third-party/admin CSS file contains an invalid static
+# reference.
 #
-# When Cloudinary is active we deliberately disable local
-# media serving because ImageField.url should come directly
-# from Cloudinary.
+# WHITENOISE_MANIFEST_STRICT can be disabled through env
+# if required, but defaults to True.
 #
+# =========================================================
+
+WHITENOISE_MANIFEST_STRICT = env_bool(
+    "WHITENOISE_MANIFEST_STRICT",
+    default=True,
+)
+
+
+# =========================================================
+# Local Media Serving
 # =========================================================
 
 SERVE_MEDIA_LOCALLY = (
@@ -736,9 +711,6 @@ SERVE_MEDIA_LOCALLY = (
 
 # =========================================================
 # File Upload Limits
-# =========================================================
-#
-# Bulk product images are uploaded as ZIP archives.
 # =========================================================
 
 DATA_UPLOAD_MAX_MEMORY_SIZE = env_int(
@@ -1131,23 +1103,13 @@ CELERY_ACCEPT_CONTENT = [
 ]
 
 
-CELERY_TASK_SERIALIZER = (
-    "json"
-)
+CELERY_TASK_SERIALIZER = "json"
 
+CELERY_RESULT_SERIALIZER = "json"
 
-CELERY_RESULT_SERIALIZER = (
-    "json"
-)
-
-
-CELERY_TIMEZONE = (
-    TIME_ZONE
-)
-
+CELERY_TIMEZONE = TIME_ZONE
 
 CELERY_ENABLE_UTC = True
-
 
 CELERY_TASK_TRACK_STARTED = True
 
@@ -1184,9 +1146,7 @@ CELERY_TASK_ACKS_LATE = env_bool(
 
 CELERY_TASK_REJECT_ON_WORKER_LOST = True
 
-
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
-
 
 CELERY_BROKER_CONNECTION_RETRY = True
 
@@ -1501,9 +1461,11 @@ if DEBUG:
 
     print(
         "CLOUDINARY CLOUD NAME:",
-        CLOUDINARY_CLOUD_NAME
-        if CLOUDINARY_CLOUD_NAME
-        else "Not configured",
+        (
+            CLOUDINARY_CLOUD_NAME
+            if CLOUDINARY_CLOUD_NAME
+            else "Not configured"
+        ),
     )
 
 
@@ -1520,6 +1482,28 @@ if DEBUG:
         ][
             "BACKEND"
         ],
+    )
+
+
+    print(
+        "STATIC STORAGE:",
+        STORAGES[
+            "staticfiles"
+        ][
+            "BACKEND"
+        ],
+    )
+
+
+    print(
+        "STATICFILES STORAGE COMPATIBILITY:",
+        STATICFILES_STORAGE,
+    )
+
+
+    print(
+        "WHITENOISE MANIFEST STRICT:",
+        WHITENOISE_MANIFEST_STRICT,
     )
 
 
