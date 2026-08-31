@@ -289,9 +289,8 @@ if CLOUDINARY_API_SECRET:
 #
 # Cloudinary is used only for uploaded MEDIA.
 #
-# Therefore django.contrib.staticfiles MUST appear before
-# cloudinary_storage so Django's normal collectstatic
-# command remains active.
+# django.contrib.staticfiles stays before cloudinary_storage
+# so Django's normal collectstatic command remains active.
 #
 # =========================================================
 
@@ -595,14 +594,23 @@ STATIC_ROOT = (
 # Legacy Static Compatibility
 # =========================================================
 #
-# Kept for django-cloudinary-storage 0.3.0 compatibility.
-# Actual Django 5 static storage is configured through
-# STORAGES below.
+# django-cloudinary-storage 0.3.0 checks the old
+# STATICFILES_STORAGE setting from its management command.
+#
+# We keep this compatibility setting, but DO NOT use
+# Cloudinary or WhiteNoise manifest storage for static
+# collection.
+#
+# Django Admin / DRF static files use normal
+# StaticFilesStorage.
+#
+# WhiteNoise middleware can still serve STATIC_ROOT.
+#
 # =========================================================
 
 STATICFILES_STORAGE = (
-    "whitenoise.storage."
-    "CompressedManifestStaticFilesStorage"
+    "django.contrib.staticfiles.storage."
+    "StaticFilesStorage"
 )
 
 
@@ -625,11 +633,31 @@ MEDIA_ROOT = (
 # Storage Backends
 # =========================================================
 #
+# IMPORTANT:
+#
 # default:
-#     User uploaded media.
+#     Uploaded product/media files.
+#
+#     USE_CLOUDINARY=True
+#         -> Cloudinary
+#
+#     USE_CLOUDINARY=False
+#         -> Local filesystem
 #
 # staticfiles:
-#     Django admin / DRF / application static assets.
+#     Django Admin / DRF / application static files.
+#
+#     We intentionally use StaticFilesStorage instead of
+#     CompressedManifestStaticFilesStorage.
+#
+#     This avoids WhiteNoise post-processing failures such
+#     as:
+#
+#     MissingFileError:
+#     admin/img/sorting-icons.svg
+#
+# WhiteNoise middleware remains enabled in production and
+# serves the collected STATIC_ROOT files.
 #
 # =========================================================
 
@@ -648,8 +676,8 @@ if USE_CLOUDINARY:
         "staticfiles": {
 
             "BACKEND": (
-                "whitenoise.storage."
-                "CompressedManifestStaticFilesStorage"
+                "django.contrib.staticfiles.storage."
+                "StaticFilesStorage"
             ),
         },
     }
@@ -670,30 +698,26 @@ else:
         "staticfiles": {
 
             "BACKEND": (
-                "whitenoise.storage."
-                "CompressedManifestStaticFilesStorage"
+                "django.contrib.staticfiles.storage."
+                "StaticFilesStorage"
             ),
         },
     }
 
 
 # =========================================================
-# WhiteNoise Missing File Compatibility
+# WhiteNoise Configuration
 # =========================================================
 #
-# The manifest storage can fail hard when an installed
-# third-party/admin CSS file contains an invalid static
-# reference.
+# Manifest strict mode is not required because we are no
+# longer using WhiteNoise ManifestStaticFilesStorage.
 #
-# WHITENOISE_MANIFEST_STRICT can be disabled through env
-# if required, but defaults to True.
+# WhiteNoise is being used as middleware to serve the files
+# collected into STATIC_ROOT.
 #
 # =========================================================
 
-WHITENOISE_MANIFEST_STRICT = env_bool(
-    "WHITENOISE_MANIFEST_STRICT",
-    default=True,
-)
+WHITENOISE_MANIFEST_STRICT = False
 
 
 # =========================================================
