@@ -14,11 +14,14 @@ import {
 import {
   cancelOrder,
   fetchOrder,
+  fetchOrderTracking,
 } from "../services/api";
+
 
 const BACKEND_URL =
   import.meta.env.VITE_BACKEND_URL ||
   "http://127.0.0.1:8000";
+
 
 const STATUS_LABELS = {
   pending: "Pending",
@@ -26,6 +29,7 @@ const STATUS_LABELS = {
   processing: "Processing",
   packed: "Packed",
   shipped: "Shipped",
+  in_transit: "In Transit",
   out_for_delivery: "Out for Delivery",
   delivered: "Delivered",
   cancelled: "Cancelled",
@@ -33,28 +37,42 @@ const STATUS_LABELS = {
   refunded: "Refunded",
 };
 
+
 const STATUS_STYLES = {
   pending:
     "bg-yellow-100 text-yellow-700",
+
   confirmed:
     "bg-blue-100 text-blue-700",
+
   processing:
     "bg-purple-100 text-purple-700",
+
   packed:
     "bg-indigo-100 text-indigo-700",
+
   shipped:
     "bg-cyan-100 text-cyan-700",
+
+  in_transit:
+    "bg-sky-100 text-sky-700",
+
   out_for_delivery:
     "bg-orange-100 text-orange-700",
+
   delivered:
     "bg-green-100 text-green-700",
+
   cancelled:
     "bg-red-100 text-red-700",
+
   returned:
     "bg-gray-200 text-gray-700",
+
   refunded:
     "bg-teal-100 text-teal-700",
 };
+
 
 const PAYMENT_LABELS = {
   cod: "Cash on Delivery",
@@ -64,6 +82,16 @@ const PAYMENT_LABELS = {
   net_banking: "Net Banking",
 };
 
+
+const PAYMENT_STATUS_LABELS = {
+  pending: "Pending",
+  paid: "Paid",
+  failed: "Failed",
+  refunded: "Refunded",
+  partially_refunded: "Partially Refunded",
+};
+
+
 const ORDER_STEPS = [
   {
     key: "pending",
@@ -71,36 +99,49 @@ const ORDER_STEPS = [
     description:
       "Your order has been placed successfully.",
   },
+
   {
     key: "confirmed",
     title: "Confirmed",
     description:
       "Your order has been confirmed.",
   },
+
   {
     key: "processing",
     title: "Processing",
     description:
       "Your order is being prepared.",
   },
+
   {
     key: "packed",
     title: "Packed",
     description:
       "Your items have been packed.",
   },
+
   {
     key: "shipped",
     title: "Shipped",
     description:
-      "Your order is on the way.",
+      "Your order has been handed over to the courier.",
   },
+
+  {
+    key: "in_transit",
+    title: "In Transit",
+    description:
+      "Your shipment is travelling towards your delivery location.",
+  },
+
   {
     key: "out_for_delivery",
     title: "Out for Delivery",
     description:
       "The delivery partner will contact you soon.",
   },
+
   {
     key: "delivered",
     title: "Delivered",
@@ -109,15 +150,18 @@ const ORDER_STEPS = [
   },
 ];
 
+
 const STATUS_INDEX = {
   pending: 0,
   confirmed: 1,
   processing: 2,
   packed: 3,
   shipped: 4,
-  out_for_delivery: 5,
-  delivered: 6,
+  in_transit: 5,
+  out_for_delivery: 6,
+  delivered: 7,
 };
+
 
 const CANCELLABLE_STATUSES =
   new Set([
@@ -126,13 +170,24 @@ const CANCELLABLE_STATUSES =
     "processing",
   ]);
 
-function formatDate(value) {
+
+// =========================================================
+// Formatting Helpers
+// =========================================================
+
+function formatDate(
+  value
+) {
   if (!value) {
     return "—";
   }
 
+
   const date =
-    new Date(value);
+    new Date(
+      value
+    );
+
 
   if (
     Number.isNaN(
@@ -142,28 +197,58 @@ function formatDate(value) {
     return value;
   }
 
+
   return new Intl.DateTimeFormat(
     "en-IN",
     {
-      dateStyle: "medium",
-      timeStyle: "short",
+      dateStyle:
+        "medium",
+
+      timeStyle:
+        "short",
     }
-  ).format(date);
+  ).format(
+    date
+  );
 }
 
-function formatMoney(value) {
-  return Number(
-    value || 0
-  ).toFixed(2);
+
+function formatMoney(
+  value
+) {
+  const amount =
+    Number(
+      value || 0
+    );
+
+
+  if (
+    Number.isNaN(
+      amount
+    )
+  ) {
+    return "0.00";
+  }
+
+
+  return amount.toFixed(
+    2
+  );
 }
 
-function formatApiError(error) {
-  if (!error?.data) {
+
+function formatApiError(
+  error
+) {
+  if (
+    !error?.data
+  ) {
     return (
       error?.message ||
       "Order details load nahi ho paayi."
     );
   }
+
 
   if (
     typeof error.data ===
@@ -171,6 +256,7 @@ function formatApiError(error) {
   ) {
     return error.data;
   }
+
 
   if (
     error.data.detail
@@ -180,11 +266,26 @@ function formatApiError(error) {
     );
   }
 
+
+  if (
+    error.data.message
+  ) {
+    return String(
+      error.data.message
+    );
+  }
+
+
   return Object.entries(
     error.data
   )
     .map(
-      ([field, messages]) => {
+      (
+        [
+          field,
+          messages,
+        ]
+      ) => {
         if (
           Array.isArray(
             messages
@@ -195,41 +296,91 @@ function formatApiError(error) {
           )}`;
         }
 
+
+        if (
+          typeof messages ===
+          "object" &&
+          messages !==
+          null
+        ) {
+          return `${field}: ${JSON.stringify(
+            messages
+          )}`;
+        }
+
+
         return `${field}: ${String(
           messages
         )}`;
       }
     )
-    .join(" ");
+    .join(
+      " "
+    );
 }
 
-function getImageUrl(image) {
+
+// =========================================================
+// Image Helper
+// =========================================================
+
+function getImageUrl(
+  image
+) {
   if (!image) {
     return "";
   }
 
-  if (
-    image.startsWith(
-      "http://"
-    ) ||
-    image.startsWith(
-      "https://"
-    ) ||
-    image.startsWith(
-      "data:"
-    )
-  ) {
-    return image;
+
+  const imageValue =
+    typeof image ===
+    "string"
+      ? image
+      : image?.url ||
+        image?.image ||
+        "";
+
+
+  if (!imageValue) {
+    return "";
   }
 
+
+  if (
+    imageValue.startsWith(
+      "http://"
+    ) ||
+    imageValue.startsWith(
+      "https://"
+    ) ||
+    imageValue.startsWith(
+      "data:"
+    ) ||
+    imageValue.startsWith(
+      "blob:"
+    )
+  ) {
+    return imageValue;
+  }
+
+
   return `${BACKEND_URL}${
-    image.startsWith("/")
-      ? image
-      : `/${image}`
+    imageValue.startsWith(
+      "/"
+    )
+      ? imageValue
+      : `/${imageValue}`
   }`;
 }
 
-function getOrderItems(order) {
+
+// =========================================================
+// Order Helpers
+// =========================================================
+
+function getOrderItems(
+  order
+) {
   if (
     Array.isArray(
       order?.items
@@ -237,6 +388,7 @@ function getOrderItems(order) {
   ) {
     return order.items;
   }
+
 
   if (
     Array.isArray(
@@ -246,51 +398,275 @@ function getOrderItems(order) {
     return order.order_items;
   }
 
+
   return [];
 }
+
+
+function normalizeStatus(
+  value
+) {
+  return String(
+    value || ""
+  )
+    .trim()
+    .toLowerCase()
+    .replace(
+      /[\s-]+/g,
+      "_"
+    );
+}
+
+
+function getTrackingPayload(
+  response
+) {
+  if (!response) {
+    return null;
+  }
+
+
+  return (
+    response?.tracking ||
+    response?.shipment ||
+    response?.data ||
+    response
+  );
+}
+
+
+function getTrackingStatus(
+  order,
+  tracking
+) {
+  const possibleStatus =
+    tracking?.shipping_status ||
+    tracking?.shipment_status ||
+    tracking?.status ||
+    order?.shipping_status ||
+    order?.status ||
+    "pending";
+
+
+  const normalized =
+    normalizeStatus(
+      possibleStatus
+    );
+
+
+  if (
+    normalized ===
+    "in_transit" ||
+    normalized ===
+    "intransit"
+  ) {
+    return "in_transit";
+  }
+
+
+  if (
+    normalized ===
+    "out_for_delivery" ||
+    normalized ===
+    "outfordelivery"
+  ) {
+    return "out_for_delivery";
+  }
+
+
+  if (
+    normalized ===
+    "delivered"
+  ) {
+    return "delivered";
+  }
+
+
+  if (
+    normalized ===
+    "shipped"
+  ) {
+    return "shipped";
+  }
+
+
+  /*
+   * Courier APIs may return statuses that do not directly
+   * match our internal order workflow.
+   *
+   * In that case, preserve the normal order.status.
+   */
+  if (
+    STATUS_INDEX[
+      normalized
+    ] !==
+    undefined
+  ) {
+    return normalized;
+  }
+
+
+  return normalizeStatus(
+    order?.status ||
+    "pending"
+  );
+}
+
+
+function getStepTimestamp(
+  stepKey,
+  order,
+  tracking
+) {
+  const timestamps = {
+    pending:
+      order?.placed_at ||
+      order?.created_at,
+
+    confirmed:
+      order?.confirmed_at,
+
+    processing:
+      order?.processing_at,
+
+    packed:
+      order?.packed_at,
+
+    shipped:
+      tracking?.shipped_at ||
+      order?.shipped_at,
+
+    in_transit:
+      tracking?.in_transit_at ||
+      order?.in_transit_at,
+
+    out_for_delivery:
+      tracking?.out_for_delivery_at ||
+      order?.out_for_delivery_at,
+
+    delivered:
+      tracking?.delivered_at ||
+      order?.delivered_at,
+  };
+
+
+  return (
+    timestamps[
+      stepKey
+    ] ||
+    null
+  );
+}
+
+
+// =========================================================
+// Component
+// =========================================================
 
 function OrderDetails() {
   const {
     orderNumber,
   } = useParams();
 
+
   const navigate =
     useNavigate();
+
 
   const [
     order,
     setOrder,
-  ] = useState(null);
+  ] = useState(
+    null
+  );
+
+
+  const [
+    tracking,
+    setTracking,
+  ] = useState(
+    null
+  );
+
 
   const [
     loading,
     setLoading,
-  ] = useState(true);
+  ] = useState(
+    true
+  );
+
 
   const [
     error,
     setError,
-  ] = useState("");
+  ] = useState(
+    ""
+  );
+
 
   const [
     cancelling,
     setCancelling,
-  ] = useState(false);
+  ] = useState(
+    false
+  );
+
+
+  const [
+    trackingLoading,
+    setTrackingLoading,
+  ] = useState(
+    false
+  );
+
+
+  const [
+    trackingError,
+    setTrackingError,
+  ] = useState(
+    ""
+  );
+
+
+  // =======================================================
+  // Load Order
+  // =======================================================
 
   const loadOrder =
     useCallback(
       async () => {
-        if (!orderNumber) {
-          setOrder(null);
+        if (
+          !orderNumber
+        ) {
+          setOrder(
+            null
+          );
+
+          setTracking(
+            null
+          );
+
           setError(
             "Order number is missing."
           );
-          setLoading(false);
+
+          setLoading(
+            false
+          );
+
           return;
         }
 
-        setLoading(true);
-        setError("");
+
+        setLoading(
+          true
+        );
+
+        setError(
+          ""
+        );
+
 
         try {
           const response =
@@ -298,15 +674,83 @@ function OrderDetails() {
               orderNumber
             );
 
-          setOrder(
+
+          const loadedOrder =
             response?.order ||
-              response
+            response?.data ||
+            response;
+
+
+          setOrder(
+            loadedOrder
           );
-        } catch (fetchError) {
+
+
+          /*
+           * Tracking should not prevent the whole
+           * Order Details page from loading.
+           */
+          setTrackingLoading(
+            true
+          );
+
+          setTrackingError(
+            ""
+          );
+
+
+          try {
+            const trackingResponse =
+              await fetchOrderTracking(
+                loadedOrder?.order_number ||
+                orderNumber
+              );
+
+
+            setTracking(
+              getTrackingPayload(
+                trackingResponse
+              )
+            );
+          } catch (
+            trackingFetchError
+          ) {
+            console.warn(
+              "Order tracking load error:",
+              trackingFetchError
+            );
+
+
+            setTracking(
+              null
+            );
+
+
+            /*
+             * 404 / no shipment yet is normal for a new order.
+             * We keep it as a small shipping-section message.
+             */
+            setTrackingError(
+              trackingFetchError?.status ===
+                404
+                ? ""
+                : formatApiError(
+                    trackingFetchError
+                  )
+            );
+          } finally {
+            setTrackingLoading(
+              false
+            );
+          }
+        } catch (
+          fetchError
+        ) {
           console.error(
             "Order details error:",
             fetchError
           );
+
 
           setError(
             formatApiError(
@@ -314,17 +758,40 @@ function OrderDetails() {
             )
           );
 
-          setOrder(null);
+
+          setOrder(
+            null
+          );
+
+
+          setTracking(
+            null
+          );
         } finally {
-          setLoading(false);
+          setLoading(
+            false
+          );
         }
       },
-      [orderNumber]
+      [
+        orderNumber,
+      ]
     );
 
-  useEffect(() => {
-    loadOrder();
-  }, [loadOrder]);
+
+  useEffect(
+    () => {
+      loadOrder();
+    },
+    [
+      loadOrder,
+    ]
+  );
+
+
+  // =======================================================
+  // Derived Order Data
+  // =======================================================
 
   const items =
     useMemo(
@@ -332,108 +799,272 @@ function OrderDetails() {
         getOrderItems(
           order
         ),
-      [order]
+      [
+        order,
+      ]
     );
 
-  const status =
-    order?.status ||
-    "pending";
+
+  const orderStatus =
+    normalizeStatus(
+      order?.status ||
+      "pending"
+    );
+
+
+  const shipmentStatus =
+    getTrackingStatus(
+      order,
+      tracking
+    );
+
+
+  const timelineStatus =
+    orderStatus ===
+      "cancelled" ||
+    orderStatus ===
+      "returned" ||
+    orderStatus ===
+      "refunded"
+      ? orderStatus
+      : shipmentStatus;
+
 
   const currentStatusIndex =
     STATUS_INDEX[
-      status
-    ] ?? -1;
+      timelineStatus
+    ] ??
+    STATUS_INDEX[
+      orderStatus
+    ] ??
+    -1;
 
-  const canCancel =
-    CANCELLABLE_STATUSES.has(
-      status
-    );
 
   const isCancelled =
-    status ===
+    orderStatus ===
     "cancelled";
 
+
+  const isReturned =
+    orderStatus ===
+    "returned";
+
+
+  const isRefunded =
+    orderStatus ===
+    "refunded";
+
+
+  const hasShipment =
+    Boolean(
+      order?.shiprocket_shipment_id ||
+      order?.shipment_id ||
+      tracking?.shiprocket_shipment_id ||
+      tracking?.shipment_id
+    );
+
+
+  const canCancel =
+    typeof order?.is_cancellable ===
+    "boolean"
+      ? order.is_cancellable
+      : (
+          CANCELLABLE_STATUSES.has(
+            orderStatus
+          ) &&
+          !hasShipment
+        );
+
+
   const fullAddress =
-    useMemo(() => {
-      if (!order) {
-        return "";
-      }
+    useMemo(
+      () => {
+        if (
+          !order
+        ) {
+          return "";
+        }
 
-      if (
-        order.full_address
-      ) {
-        return order.full_address;
-      }
 
-      return [
-        order.address_line_1,
-        order.address_line_2,
-        order.landmark,
-        order.city,
-        order.state,
-        order.postal_code,
-        order.country,
+        if (
+          order.full_address
+        ) {
+          return order.full_address;
+        }
+
+
+        return [
+          order.address_line_1,
+          order.address_line_2,
+          order.landmark,
+          order.city,
+          order.state,
+          order.postal_code,
+          order.country,
+        ]
+          .filter(
+            Boolean
+          )
+          .join(
+            ", "
+          );
+      },
+      [
+        order,
       ]
-        .filter(Boolean)
-        .join(", ");
-    }, [order]);
+    );
+
+
+  const totalItems =
+    order?.total_items ??
+    items.reduce(
+      (
+        total,
+        item
+      ) =>
+        total +
+        Number(
+          item.quantity ||
+          1
+        ),
+      0
+    );
+
+
+  // =======================================================
+  // Shipping Details
+  // =======================================================
+
+  const courierName =
+    tracking?.courier_name ||
+    tracking?.courier ||
+    order?.courier_name ||
+    "";
+
+
+  const courierService =
+    tracking?.courier_service ||
+    tracking?.service ||
+    order?.courier_service ||
+    "";
+
+
+  const awbCode =
+    tracking?.awb_code ||
+    tracking?.tracking_id ||
+    order?.awb_code ||
+    order?.tracking_id ||
+    "";
+
+
+  const trackingUrl =
+    tracking?.tracking_url ||
+    order?.tracking_url ||
+    "";
+
+
+  const estimatedDelivery =
+    tracking?.estimated_delivery ||
+    tracking?.estimated_delivery_date ||
+    order?.estimated_delivery ||
+    "";
+
+
+  const pickupScheduled =
+    tracking?.pickup_scheduled ??
+    order?.pickup_scheduled ??
+    false;
+
+
+  const shippingStatusText =
+    tracking?.shipping_status ||
+    tracking?.shipment_status ||
+    order?.shipping_status ||
+    "";
+
+
+  // =======================================================
+  // Cancel Order
+  // =======================================================
 
   const handleCancel =
     async () => {
-      if (!order) {
+      if (
+        !order ||
+        !canCancel
+      ) {
         return;
       }
+
+
+      const currentOrderNumber =
+        order.order_number ||
+        orderNumber;
+
 
       const confirmed =
         window.confirm(
-          `Cancel order ${
-            order.order_number ||
-            orderNumber
-          }?`
+          `Cancel order ${currentOrderNumber}?`
         );
 
-      if (!confirmed) {
+
+      if (
+        !confirmed
+      ) {
         return;
       }
+
 
       try {
         setCancelling(
           true
         );
 
+
         const response =
           await cancelOrder(
-            order.order_number ||
-              orderNumber
+            currentOrderNumber
           );
 
+
         const updatedOrder =
-          response?.order || {
+          response?.order ||
+          response?.data ||
+          {
             ...order,
+
             status:
               response?.status ||
               "cancelled",
+
             cancelled_at:
               response?.cancelled_at ||
               new Date().toISOString(),
           };
 
+
         setOrder(
-          (current) => ({
+          (
+            current
+          ) => ({
             ...current,
             ...updatedOrder,
           })
         );
 
+
         window.alert(
           response?.message ||
-            "Order cancelled successfully."
+          "Order cancelled successfully."
         );
-      } catch (cancelError) {
+      } catch (
+        cancelError
+      ) {
         console.error(
           "Order cancellation error:",
           cancelError
         );
+
 
         window.alert(
           formatApiError(
@@ -447,19 +1078,33 @@ function OrderDetails() {
       }
     };
 
-  if (loading) {
+
+  // =======================================================
+  // Loading State
+  // =======================================================
+
+  if (
+    loading
+  ) {
     return (
       <section className="min-h-screen bg-gray-50 px-4 py-10 sm:px-6">
         <div className="mx-auto max-w-6xl">
           <div className="mt-8 space-y-6">
             <div className="h-48 animate-pulse rounded-3xl bg-white" />
+
             <div className="h-72 animate-pulse rounded-3xl bg-white" />
+
             <div className="h-56 animate-pulse rounded-3xl bg-white" />
           </div>
         </div>
       </section>
     );
   }
+
+
+  // =======================================================
+  // Error State
+  // =======================================================
 
   if (
     error ||
@@ -504,9 +1149,17 @@ function OrderDetails() {
     );
   }
 
+
+  // =======================================================
+  // Main Page
+  // =======================================================
+
   return (
     <section className="min-h-screen bg-gray-50 px-4 py-10 sm:px-6">
       <div className="mx-auto max-w-6xl">
+
+        {/* Back */}
+
         <button
           type="button"
           onClick={() =>
@@ -518,6 +1171,11 @@ function OrderDetails() {
         >
           ← Back to My Orders
         </button>
+
+
+        {/* =================================================
+            Order Header
+        ================================================= */}
 
         <div className="mt-8 overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
           <div className="flex flex-col gap-5 border-b bg-gray-50 p-6 md:flex-row md:items-center md:justify-between md:p-8">
@@ -535,7 +1193,7 @@ function OrderDetails() {
                 Placed on{" "}
                 {formatDate(
                   order.placed_at ||
-                    order.created_at
+                  order.created_at
                 )}
               </p>
             </div>
@@ -544,26 +1202,29 @@ function OrderDetails() {
               <span
                 className={`rounded-full px-4 py-2 text-sm font-semibold ${
                   STATUS_STYLES[
-                    status
+                    orderStatus
                   ] ||
                   "bg-gray-100 text-gray-700"
                 }`}
               >
                 {STATUS_LABELS[
-                  status
+                  orderStatus
                 ] ||
-                  status}
+                  orderStatus}
               </span>
 
               <span className="text-2xl font-bold text-blue-600">
                 ₹
                 {formatMoney(
-                  order.total_amount ||
-                    order.total
+                  order.total_amount ??
+                  order.total
                 )}
               </span>
             </div>
           </div>
+
+
+          {/* Basic Information */}
 
           <div className="grid gap-6 p-6 md:grid-cols-3 md:p-8">
             <div>
@@ -583,6 +1244,7 @@ function OrderDetails() {
               </p>
             </div>
 
+
             <div>
               <p className="text-sm text-gray-500">
                 Payment
@@ -596,12 +1258,16 @@ function OrderDetails() {
                   "—"}
               </p>
 
-              <p className="mt-1 text-sm capitalize text-gray-600">
+              <p className="mt-1 text-sm text-gray-600">
                 Status:{" "}
-                {order.payment_status ||
-                  "pending"}
+                {PAYMENT_STATUS_LABELS[
+                  order.payment_status
+                ] ||
+                  order.payment_status ||
+                  "Pending"}
               </p>
             </div>
+
 
             <div>
               <p className="text-sm text-gray-500">
@@ -609,26 +1275,17 @@ function OrderDetails() {
               </p>
 
               <p className="mt-1 font-semibold">
-                {order.total_items ||
-                  items.reduce(
-                    (
-                      total,
-                      item
-                    ) =>
-                      total +
-                      Number(
-                        item.quantity ||
-                          1
-                      ),
-                    0
-                  )}{" "}
+                {totalItems}{" "}
                 item(s)
               </p>
             </div>
           </div>
         </div>
 
-        {/* Order Timeline */}
+
+        {/* =================================================
+            Order Timeline
+        ================================================= */}
 
         <div className="mt-8 rounded-3xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -648,10 +1305,10 @@ function OrderDetails() {
                 navigate(
                   `/track-order?order=${encodeURIComponent(
                     order.order_number ||
-                      orderNumber
+                    orderNumber
                   )}&phone=${encodeURIComponent(
                     order.phone ||
-                      ""
+                    ""
                   )}`
                 )
               }
@@ -660,6 +1317,7 @@ function OrderDetails() {
               Track Order
             </button>
           </div>
+
 
           {isCancelled ? (
             <div className="mt-7 rounded-2xl bg-red-50 p-6 text-center">
@@ -674,6 +1332,26 @@ function OrderDetails() {
                 )}
               </p>
             </div>
+          ) : isReturned ? (
+            <div className="mt-7 rounded-2xl bg-gray-100 p-6 text-center">
+              <h3 className="text-xl font-bold text-gray-700">
+                Order Returned
+              </h3>
+
+              <p className="mt-2 text-gray-600">
+                This order has been marked as returned.
+              </p>
+            </div>
+          ) : isRefunded ? (
+            <div className="mt-7 rounded-2xl bg-teal-50 p-6 text-center">
+              <h3 className="text-xl font-bold text-teal-700">
+                Order Refunded
+              </h3>
+
+              <p className="mt-2 text-teal-600">
+                Refund processing for this order has been completed.
+              </p>
+            </div>
           ) : (
             <div className="mt-8 space-y-0">
               {ORDER_STEPS.map(
@@ -685,9 +1363,19 @@ function OrderDetails() {
                     currentStatusIndex >=
                     index;
 
+
                   const current =
                     currentStatusIndex ===
                     index;
+
+
+                  const timestamp =
+                    getStepTimestamp(
+                      step.key,
+                      order,
+                      tracking
+                    );
+
 
                   return (
                     <div
@@ -756,6 +1444,14 @@ function OrderDetails() {
                             step.description
                           }
                         </p>
+
+                        {timestamp && (
+                          <p className="mt-1 text-xs text-gray-400">
+                            {formatDate(
+                              timestamp
+                            )}
+                          </p>
+                        )}
                       </div>
                     </div>
                   );
@@ -765,7 +1461,177 @@ function OrderDetails() {
           )}
         </div>
 
-        {/* Ordered Items */}
+
+        {/* =================================================
+            Courier / Shipment Information
+        ================================================= */}
+
+        <div className="mt-8 rounded-3xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-2xl font-bold">
+                Shipping & Tracking
+              </h2>
+
+              <p className="mt-2 text-gray-500">
+                Courier and shipment information for this order.
+              </p>
+            </div>
+
+            {trackingLoading && (
+              <span className="rounded-full bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-600">
+                Updating...
+              </span>
+            )}
+          </div>
+
+
+          {trackingError && (
+            <div className="mt-5 rounded-2xl bg-yellow-50 p-4 text-sm text-yellow-700">
+              {trackingError}
+            </div>
+          )}
+
+
+          {!hasShipment &&
+          !awbCode &&
+          !courierName ? (
+            <div className="mt-6 rounded-2xl bg-gray-50 p-6">
+              <p className="font-semibold text-gray-700">
+                Shipment not created yet
+              </p>
+
+              <p className="mt-2 text-sm text-gray-500">
+                Courier details will appear here after your order is prepared for shipping.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="rounded-2xl bg-gray-50 p-5">
+                <p className="text-sm text-gray-500">
+                  Courier
+                </p>
+
+                <p className="mt-2 font-bold">
+                  {courierName ||
+                    "—"}
+                </p>
+
+                {courierService && (
+                  <p className="mt-1 text-sm text-gray-500">
+                    {courierService}
+                  </p>
+                )}
+              </div>
+
+
+              <div className="rounded-2xl bg-gray-50 p-5">
+                <p className="text-sm text-gray-500">
+                  AWB / Tracking ID
+                </p>
+
+                <p className="mt-2 break-all font-bold">
+                  {awbCode ||
+                    "—"}
+                </p>
+              </div>
+
+
+              <div className="rounded-2xl bg-gray-50 p-5">
+                <p className="text-sm text-gray-500">
+                  Shipping Status
+                </p>
+
+                <p className="mt-2 font-bold">
+                  {shippingStatusText
+                    ? STATUS_LABELS[
+                        normalizeStatus(
+                          shippingStatusText
+                        )
+                      ] ||
+                      shippingStatusText
+                    : STATUS_LABELS[
+                        shipmentStatus
+                      ] ||
+                      shipmentStatus ||
+                      "—"}
+                </p>
+              </div>
+
+
+              <div className="rounded-2xl bg-gray-50 p-5">
+                <p className="text-sm text-gray-500">
+                  Estimated Delivery
+                </p>
+
+                <p className="mt-2 font-bold">
+                  {estimatedDelivery
+                    ? formatDate(
+                        estimatedDelivery
+                      )
+                    : "—"}
+                </p>
+              </div>
+
+
+              <div className="rounded-2xl bg-gray-50 p-5">
+                <p className="text-sm text-gray-500">
+                  Pickup
+                </p>
+
+                <p className="mt-2 font-bold">
+                  {pickupScheduled
+                    ? "Scheduled"
+                    : "Not Scheduled"}
+                </p>
+
+                {order.pickup_scheduled_at && (
+                  <p className="mt-1 text-sm text-gray-500">
+                    {formatDate(
+                      order.pickup_scheduled_at
+                    )}
+                  </p>
+                )}
+              </div>
+
+
+              <div className="rounded-2xl bg-gray-50 p-5">
+                <p className="text-sm text-gray-500">
+                  Shipment ID
+                </p>
+
+                <p className="mt-2 break-all font-bold">
+                  {tracking?.shiprocket_shipment_id ||
+                    tracking?.shipment_id ||
+                    order.shiprocket_shipment_id ||
+                    order.shipment_id ||
+                    "—"}
+                </p>
+              </div>
+            </div>
+          )}
+
+
+          {trackingUrl && (
+            <div className="mt-6">
+              <a
+                href={
+                  trackingUrl
+                }
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex rounded-full bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700"
+              >
+                Track with Courier
+              </a>
+            </div>
+          )}
+        </div>
+
+
+        {/* =================================================
+            Ordered Items
+        ================================================= */}
 
         <div className="mt-8 rounded-3xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
           <h2 className="text-2xl font-bold">
@@ -793,22 +1659,38 @@ function OrderDetails() {
                       ?.main_image ||
                     "";
 
+
                   const productId =
                     item.product_id ||
                     item.product
                       ?.id;
 
+
+                  const unitPrice =
+                    item.unit_price ??
+                    item.price ??
+                    0;
+
+
                   const itemTotal =
-                    item.total_price ||
-                    item.subtotal ||
+                    item.total_price ??
+                    item.subtotal ??
                     Number(
-                      item.price ||
-                        0
+                      unitPrice ||
+                      0
                     ) *
                       Number(
                         item.quantity ||
-                          1
+                        1
                       );
+
+
+                  const sku =
+                    item.variant_sku ||
+                    item.sku ||
+                    item.product_sku ||
+                    "";
+
 
                   return (
                     <article
@@ -845,6 +1727,7 @@ function OrderDetails() {
                         </div>
                       )}
 
+
                       <div className="min-w-0 flex-1">
                         <h3 className="text-lg font-bold">
                           {item.product_name ||
@@ -879,12 +1762,12 @@ function OrderDetails() {
                               1}
                           </span>
 
-                          {(item.sku ||
-                            item.variant_sku) && (
+                          {sku && (
                             <span>
                               SKU:{" "}
-                              {item.sku ||
-                                item.variant_sku}
+                              {
+                                sku
+                              }
                             </span>
                           )}
                         </div>
@@ -897,17 +1780,21 @@ function OrderDetails() {
                             )}
                           </p>
 
-                          {item.price && (
+                          {unitPrice !==
+                            undefined &&
+                            unitPrice !==
+                              null && (
                             <p className="text-sm text-gray-500">
                               ₹
                               {formatMoney(
-                                item.price
+                                unitPrice
                               )}{" "}
                               each
                             </p>
                           )}
                         </div>
                       </div>
+
 
                       <div className="flex flex-wrap items-start gap-2 sm:flex-col">
                         {productId && (
@@ -924,7 +1811,7 @@ function OrderDetails() {
                           </button>
                         )}
 
-                        {status ===
+                        {orderStatus ===
                           "delivered" &&
                           productId && (
                             <button
@@ -948,9 +1835,15 @@ function OrderDetails() {
           )}
         </div>
 
-        {/* Shipping & Summary */}
+
+        {/* =================================================
+            Shipping Address + Price Summary
+        ================================================= */}
 
         <div className="mt-8 grid gap-8 lg:grid-cols-2">
+
+          {/* Shipping Address */}
+
           <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
             <h2 className="text-2xl font-bold">
               Shipping Address
@@ -983,6 +1876,9 @@ function OrderDetails() {
             )}
           </div>
 
+
+          {/* Price Summary */}
+
           <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm md:p-8">
             <h2 className="text-2xl font-bold">
               Price Summary
@@ -1002,6 +1898,7 @@ function OrderDetails() {
                 </span>
               </div>
 
+
               <div className="flex justify-between text-gray-600">
                 <span>
                   Shipping
@@ -1015,6 +1912,26 @@ function OrderDetails() {
                 </span>
               </div>
 
+
+              {Number(
+                order.tax_amount ||
+                0
+              ) > 0 && (
+                <div className="flex justify-between text-gray-600">
+                  <span>
+                    Tax
+                  </span>
+
+                  <span>
+                    ₹
+                    {formatMoney(
+                      order.tax_amount
+                    )}
+                  </span>
+                </div>
+              )}
+
+
               <div className="flex justify-between text-gray-600">
                 <span>
                   Discount
@@ -1027,6 +1944,7 @@ function OrderDetails() {
                   )}
                 </span>
               </div>
+
 
               {order.coupon_code && (
                 <div className="flex justify-between text-gray-600">
@@ -1042,6 +1960,7 @@ function OrderDetails() {
                 </div>
               )}
 
+
               <div className="flex justify-between border-t pt-4 text-lg font-bold">
                 <span>
                   Total
@@ -1050,12 +1969,13 @@ function OrderDetails() {
                 <span className="text-blue-600">
                   ₹
                   {formatMoney(
-                    order.total_amount ||
-                      order.total
+                    order.total_amount ??
+                    order.total
                   )}
                 </span>
               </div>
             </div>
+
 
             {canCancel && (
               <button
@@ -1079,5 +1999,6 @@ function OrderDetails() {
     </section>
   );
 }
+
 
 export default OrderDetails;

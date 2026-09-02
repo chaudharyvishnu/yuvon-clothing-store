@@ -22,27 +22,53 @@ from .models import (
 )
 
 
-def sync_low_stock_alert(variant):
-    """Keep LowStockAlert aligned with the variant's current stock."""
-    settings_obj = InventorySettings.load()
-    threshold = int(settings_obj.low_stock_threshold or 0)
-    current_stock = max(0, int(variant.stock or 0))
+# =========================================================
+# Inventory Helpers
+# =========================================================
 
-    alert = LowStockAlert.objects.filter(variant=variant).first()
+def sync_low_stock_alert(variant):
+    """
+    Keep LowStockAlert aligned with the variant's
+    current stock.
+    """
+
+    settings_obj = InventorySettings.load()
+
+    threshold = int(
+        settings_obj.low_stock_threshold or 0
+    )
+
+    current_stock = max(
+        0,
+        int(variant.stock or 0),
+    )
+
+    alert = (
+        LowStockAlert.objects
+        .filter(
+            variant=variant,
+        )
+        .first()
+    )
 
     if current_stock <= threshold:
+
         if alert is None:
+
             LowStockAlert.objects.create(
                 variant=variant,
                 current_stock=current_stock,
                 threshold=threshold,
                 is_active=True,
             )
+
         else:
+
             alert.current_stock = current_stock
             alert.threshold = threshold
             alert.is_active = True
             alert.resolved_at = None
+
             alert.save(
                 update_fields=[
                     "current_stock",
@@ -52,11 +78,14 @@ def sync_low_stock_alert(variant):
                     "updated_at",
                 ]
             )
+
     elif alert is not None:
+
         alert.current_stock = current_stock
         alert.threshold = threshold
         alert.is_active = False
         alert.resolved_at = timezone.now()
+
         alert.save(
             update_fields=[
                 "current_stock",
@@ -72,9 +101,14 @@ def sync_low_stock_alert(variant):
 # Shipping Address
 # =========================================================
 
-class ShippingAddressSerializer(serializers.ModelSerializer):
+class ShippingAddressSerializer(
+    serializers.ModelSerializer
+):
+
     class Meta:
+
         model = ShippingAddress
+
         fields = (
             "id",
             "full_name",
@@ -99,7 +133,11 @@ class ShippingAddressSerializer(serializers.ModelSerializer):
             "updated_at",
         )
 
-    def validate_phone(self, value):
+    def validate_phone(
+        self,
+        value,
+    ):
+
         cleaned_phone = "".join(
             character
             for character in str(value)
@@ -107,13 +145,18 @@ class ShippingAddressSerializer(serializers.ModelSerializer):
         )
 
         if len(cleaned_phone) != 10:
+
             raise serializers.ValidationError(
                 "Please enter a valid 10-digit phone number."
             )
 
         return cleaned_phone
 
-    def validate_alternate_phone(self, value):
+    def validate_alternate_phone(
+        self,
+        value,
+    ):
+
         if not value:
             return ""
 
@@ -124,13 +167,18 @@ class ShippingAddressSerializer(serializers.ModelSerializer):
         )
 
         if len(cleaned_phone) != 10:
+
             raise serializers.ValidationError(
                 "Please enter a valid 10-digit alternate phone number."
             )
 
         return cleaned_phone
 
-    def validate_postal_code(self, value):
+    def validate_postal_code(
+        self,
+        value,
+    ):
+
         cleaned_postal_code = "".join(
             character
             for character in str(value)
@@ -138,6 +186,7 @@ class ShippingAddressSerializer(serializers.ModelSerializer):
         )
 
         if len(cleaned_postal_code) != 6:
+
             raise serializers.ValidationError(
                 "Please enter a valid 6-digit postal code."
             )
@@ -149,9 +198,14 @@ class ShippingAddressSerializer(serializers.ModelSerializer):
 # Order Item
 # =========================================================
 
-class OrderItemSerializer(serializers.ModelSerializer):
+class OrderItemSerializer(
+    serializers.ModelSerializer
+):
+
     class Meta:
+
         model = OrderItem
+
         fields = (
             "id",
             "product",
@@ -175,9 +229,22 @@ class OrderItemSerializer(serializers.ModelSerializer):
 # Payment
 # =========================================================
 
-class PaymentSerializer(serializers.ModelSerializer):
+class PaymentSerializer(
+    serializers.ModelSerializer
+):
+
+    is_successful = serializers.BooleanField(
+        read_only=True,
+    )
+
+    is_refunded = serializers.BooleanField(
+        read_only=True,
+    )
+
     class Meta:
+
         model = Payment
+
         fields = (
             "id",
             "payment_method",
@@ -197,6 +264,8 @@ class PaymentSerializer(serializers.ModelSerializer):
             "paid_at",
             "created_at",
             "updated_at",
+            "is_successful",
+            "is_refunded",
         )
 
         read_only_fields = fields
@@ -206,7 +275,10 @@ class PaymentSerializer(serializers.ModelSerializer):
 # Order List / Detail
 # =========================================================
 
-class OrderSerializer(serializers.ModelSerializer):
+class OrderSerializer(
+    serializers.ModelSerializer
+):
+
     items = OrderItemSerializer(
         many=True,
         read_only=True,
@@ -224,7 +296,32 @@ class OrderSerializer(serializers.ModelSerializer):
         read_only=True,
     )
 
+    is_paid = serializers.BooleanField(
+        read_only=True,
+    )
+
+    is_cancellable = serializers.BooleanField(
+        read_only=True,
+    )
+
+    has_shipment = serializers.BooleanField(
+        read_only=True,
+    )
+
+    can_track = serializers.BooleanField(
+        read_only=True,
+    )
+
+    is_delivered = serializers.BooleanField(
+        read_only=True,
+    )
+
+    is_cancelled = serializers.BooleanField(
+        read_only=True,
+    )
+
     class Meta:
+
         model = Order
 
         fields = (
@@ -233,6 +330,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "user",
             "shipping_address",
 
+            # Address snapshot
             "full_name",
             "phone",
             "alternate_phone",
@@ -244,6 +342,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "postal_code",
             "country",
 
+            # Amounts
             "subtotal",
             "discount_amount",
             "shipping_charge",
@@ -251,27 +350,54 @@ class OrderSerializer(serializers.ModelSerializer):
             "total_amount",
             "coupon_code",
 
+            # Order / Payment
             "status",
             "payment_method",
             "payment_status",
 
+            # Notes
             "customer_note",
             "admin_note",
 
+            # Shipping / Courier
             "courier_name",
+            "courier_service",
             "tracking_id",
+            "awb_code",
+            "shipment_id",
+            "shipping_order_id",
+            "shipping_status",
+            "tracking_url",
+            "shipping_label_url",
+            "manifest_url",
+            "pickup_token",
+            "pickup_scheduled",
+            "pickup_scheduled_at",
             "estimated_delivery",
-            "shipped_at",
 
+            # Shipping provider responses
+            "shipping_response",
+            "tracking_response",
 
-
+            # Timeline
             "placed_at",
             "updated_at",
+            "shipped_at",
+            "out_for_delivery_at",
             "delivered_at",
             "cancelled_at",
 
+            # Helpers
             "total_items",
             "full_address",
+            "is_paid",
+            "is_cancellable",
+            "has_shipment",
+            "can_track",
+            "is_delivered",
+            "is_cancelled",
+
+            # Nested
             "items",
             "payment",
         )
@@ -283,7 +409,10 @@ class OrderSerializer(serializers.ModelSerializer):
 # Checkout Request Item
 # =========================================================
 
-class CheckoutItemSerializer(serializers.Serializer):
+class CheckoutItemSerializer(
+    serializers.Serializer
+):
+
     product_id = serializers.IntegerField()
 
     variant_id = serializers.IntegerField()
@@ -292,17 +421,26 @@ class CheckoutItemSerializer(serializers.Serializer):
         min_value=1,
     )
 
-    def validate(self, attrs):
+    def validate(
+        self,
+        attrs,
+    ):
+
         product_id = attrs["product_id"]
-        variant_id = attrs.get("variant_id")
+        variant_id = attrs["variant_id"]
         quantity = attrs["quantity"]
 
-        product = Product.objects.filter(
-            id=product_id,
-            is_active=True,
-        ).first()
+        product = (
+            Product.objects
+            .filter(
+                id=product_id,
+                is_active=True,
+            )
+            .first()
+        )
 
         if product is None:
+
             raise serializers.ValidationError(
                 {
                     "product_id": (
@@ -312,22 +450,29 @@ class CheckoutItemSerializer(serializers.Serializer):
                 }
             )
 
-        variant = ProductVariant.objects.filter(
-            id=variant_id,
-            product=product,
-            is_active=True,
-        ).first()
+        variant = (
+            ProductVariant.objects
+            .filter(
+                id=variant_id,
+                product=product,
+                is_active=True,
+            )
+            .first()
+        )
 
         if variant is None:
+
             raise serializers.ValidationError(
                 {
                     "variant_id": (
-                        "The selected variant is invalid or inactive."
+                        "The selected variant is "
+                        "invalid or inactive."
                     )
                 }
             )
 
         if int(variant.stock or 0) < quantity:
+
             raise serializers.ValidationError(
                 {
                     "quantity": (
@@ -347,7 +492,10 @@ class CheckoutItemSerializer(serializers.Serializer):
 # Checkout / Order Creation
 # =========================================================
 
-class CheckoutSerializer(serializers.Serializer):
+class CheckoutSerializer(
+    serializers.Serializer
+):
+
     full_name = serializers.CharField(
         max_length=150,
     )
@@ -438,7 +586,15 @@ class CheckoutSerializer(serializers.Serializer):
         many=True,
     )
 
-    def validate_phone(self, value):
+    # =====================================================
+    # Validation
+    # =====================================================
+
+    def validate_phone(
+        self,
+        value,
+    ):
+
         cleaned_phone = "".join(
             character
             for character in str(value)
@@ -446,13 +602,18 @@ class CheckoutSerializer(serializers.Serializer):
         )
 
         if len(cleaned_phone) != 10:
+
             raise serializers.ValidationError(
                 "Please enter a valid 10-digit phone number."
             )
 
         return cleaned_phone
 
-    def validate_alternate_phone(self, value):
+    def validate_alternate_phone(
+        self,
+        value,
+    ):
+
         if not value:
             return ""
 
@@ -463,13 +624,18 @@ class CheckoutSerializer(serializers.Serializer):
         )
 
         if len(cleaned_phone) != 10:
+
             raise serializers.ValidationError(
                 "Please enter a valid 10-digit alternate phone number."
             )
 
         return cleaned_phone
 
-    def validate_postal_code(self, value):
+    def validate_postal_code(
+        self,
+        value,
+    ):
+
         cleaned_postal_code = "".join(
             character
             for character in str(value)
@@ -477,57 +643,91 @@ class CheckoutSerializer(serializers.Serializer):
         )
 
         if len(cleaned_postal_code) != 6:
+
             raise serializers.ValidationError(
                 "Please enter a valid 6-digit postal code."
             )
 
         return cleaned_postal_code
 
-    def validate_items(self, value):
+    def validate_items(
+        self,
+        value,
+    ):
+
         if not value:
+
             raise serializers.ValidationError(
                 "At least one cart item is required."
             )
 
         return value
 
-    def validate(self, attrs):
-        request = self.context.get("request")
-        saved_address_id = attrs.get("saved_address_id")
+    def validate(
+        self,
+        attrs,
+    ):
+
+        request = self.context.get(
+            "request"
+        )
+
+        saved_address_id = attrs.get(
+            "saved_address_id"
+        )
 
         if saved_address_id:
+
             if not (
                 request
                 and request.user
                 and request.user.is_authenticated
             ):
+
                 raise serializers.ValidationError(
                     {
                         "saved_address_id": (
-                            "Please login before using a saved address."
+                            "Please login before using "
+                            "a saved address."
                         )
                     }
                 )
 
-            address_exists = ShippingAddress.objects.filter(
-                id=saved_address_id,
-                user=request.user,
-            ).exists()
+            address_exists = (
+                ShippingAddress.objects
+                .filter(
+                    id=saved_address_id,
+                    user=request.user,
+                )
+                .exists()
+            )
 
             if not address_exists:
+
                 raise serializers.ValidationError(
                     {
                         "saved_address_id": (
-                            "The selected saved address was not found."
+                            "The selected saved address "
+                            "was not found."
                         )
                     }
                 )
 
         return attrs
 
+    # =====================================================
+    # Create Order
+    # =====================================================
+
     @transaction.atomic
-    def create(self, validated_data):
-        request = self.context.get("request")
+    def create(
+        self,
+        validated_data,
+    ):
+
+        request = self.context.get(
+            "request"
+        )
 
         user = None
 
@@ -538,26 +738,48 @@ class CheckoutSerializer(serializers.Serializer):
         ):
             user = request.user
 
-        items_data = validated_data.pop("items")
+        items_data = validated_data.pop(
+            "items"
+        )
 
-        # Merge duplicate variant rows before locking/checking stock.
+        # =================================================
+        # Merge duplicate variant rows
+        # =================================================
+
         aggregated_items = {}
+
         for item_data in items_data:
-            variant = item_data["variant_object"]
+
+            variant = item_data[
+                "variant_object"
+            ]
+
             key = variant.pk
 
             if key not in aggregated_items:
+
                 aggregated_items[key] = {
-                    "product_object": item_data["product_object"],
-                    "variant_object": variant,
-                    "quantity": 0,
+                    "product_object":
+                        item_data["product_object"],
+
+                    "variant_object":
+                        variant,
+
+                    "quantity":
+                        0,
                 }
 
-            aggregated_items[key]["quantity"] += int(
+            aggregated_items[
+                key
+            ][
+                "quantity"
+            ] += int(
                 item_data["quantity"]
             )
 
-        items_data = list(aggregated_items.values())
+        items_data = list(
+            aggregated_items.values()
+        )
 
         saved_address_id = validated_data.pop(
             "saved_address_id",
@@ -591,8 +813,12 @@ class CheckoutSerializer(serializers.Serializer):
 
         shipping_address = None
 
-        # Existing saved address selected
+        # =================================================
+        # Existing Saved Address
+        # =================================================
+
         if user and saved_address_id:
+
             shipping_address = (
                 ShippingAddress.objects
                 .select_for_update()
@@ -604,132 +830,178 @@ class CheckoutSerializer(serializers.Serializer):
             )
 
             if shipping_address is None:
+
                 raise serializers.ValidationError(
                     {
                         "saved_address_id": (
-                            "The selected saved address was not found."
+                            "The selected saved address "
+                            "was not found."
                         )
                     }
                 )
 
-            validated_data["full_name"] = (
-                shipping_address.full_name
-            )
+            validated_data[
+                "full_name"
+            ] = shipping_address.full_name
 
-            validated_data["phone"] = (
-                shipping_address.phone
-            )
+            validated_data[
+                "phone"
+            ] = shipping_address.phone
 
-            validated_data["alternate_phone"] = (
-                shipping_address.alternate_phone
-            )
+            validated_data[
+                "alternate_phone"
+            ] = shipping_address.alternate_phone
 
-            validated_data["address_line_1"] = (
-                shipping_address.address_line_1
-            )
+            validated_data[
+                "address_line_1"
+            ] = shipping_address.address_line_1
 
-            validated_data["address_line_2"] = (
-                shipping_address.address_line_2
-            )
+            validated_data[
+                "address_line_2"
+            ] = shipping_address.address_line_2
 
-            validated_data["landmark"] = (
-                shipping_address.landmark
-            )
+            validated_data[
+                "landmark"
+            ] = shipping_address.landmark
 
-            validated_data["city"] = (
-                shipping_address.city
-            )
+            validated_data[
+                "city"
+            ] = shipping_address.city
 
-            validated_data["state"] = (
-                shipping_address.state
-            )
+            validated_data[
+                "state"
+            ] = shipping_address.state
 
-            validated_data["postal_code"] = (
-                shipping_address.postal_code
-            )
+            validated_data[
+                "postal_code"
+            ] = shipping_address.postal_code
 
-            validated_data["country"] = (
-                shipping_address.country
-            )
+            validated_data[
+                "country"
+            ] = shipping_address.country
 
-        # New address
+        # =================================================
+        # Save New Address
+        # =================================================
+
         elif user and save_address:
-            shipping_address = ShippingAddress.objects.create(
-                user=user,
-                full_name=validated_data["full_name"],
-                phone=validated_data["phone"],
-                alternate_phone=validated_data.get(
-                    "alternate_phone",
-                    "",
-                ),
-                address_line_1=validated_data[
-                    "address_line_1"
-                ],
-                address_line_2=validated_data.get(
-                    "address_line_2",
-                    "",
-                ),
-                landmark=validated_data.get(
-                    "landmark",
-                    "",
-                ),
-                city=validated_data["city"],
-                state=validated_data["state"],
-                postal_code=validated_data[
-                    "postal_code"
-                ],
-                country=validated_data.get(
-                    "country",
-                    "India",
-                ),
-                address_type=address_type,
-                is_default=is_default_address,
+
+            shipping_address = (
+                ShippingAddress.objects.create(
+                    user=user,
+
+                    full_name=validated_data[
+                        "full_name"
+                    ],
+
+                    phone=validated_data[
+                        "phone"
+                    ],
+
+                    alternate_phone=validated_data.get(
+                        "alternate_phone",
+                        "",
+                    ),
+
+                    address_line_1=validated_data[
+                        "address_line_1"
+                    ],
+
+                    address_line_2=validated_data.get(
+                        "address_line_2",
+                        "",
+                    ),
+
+                    landmark=validated_data.get(
+                        "landmark",
+                        "",
+                    ),
+
+                    city=validated_data[
+                        "city"
+                    ],
+
+                    state=validated_data[
+                        "state"
+                    ],
+
+                    postal_code=validated_data[
+                        "postal_code"
+                    ],
+
+                    country=validated_data.get(
+                        "country",
+                        "India",
+                    ),
+
+                    address_type=address_type,
+
+                    is_default=is_default_address,
+                )
             )
 
-        subtotal = Decimal("0.00")
+        # =================================================
+        # Prepare Items / Lock Inventory
+        # =================================================
+
+        subtotal = Decimal(
+            "0.00"
+        )
+
         prepared_items = []
 
         for item_data in items_data:
-            product = item_data["product_object"]
-            variant = item_data["variant_object"]
-            quantity = item_data["quantity"]
 
-            # Stock ko database level par lock karna
-            if variant is not None:
-                variant = (
-                    ProductVariant.objects
-                    .select_for_update()
-                    .filter(
-                        id=variant.id,
-                        product=product,
-                        is_active=True,
-                    )
-                    .first()
+            product = item_data[
+                "product_object"
+            ]
+
+            variant = item_data[
+                "variant_object"
+            ]
+
+            quantity = item_data[
+                "quantity"
+            ]
+
+            variant = (
+                ProductVariant.objects
+                .select_for_update()
+                .filter(
+                    id=variant.id,
+                    product=product,
+                    is_active=True,
+                )
+                .first()
+            )
+
+            if variant is None:
+
+                raise serializers.ValidationError(
+                    {
+                        "items": (
+                            f"A selected variant for "
+                            f"{product.name} is no "
+                            f"longer available."
+                        )
+                    }
                 )
 
-                if variant is None:
-                    raise serializers.ValidationError(
-                        {
-                            "items": (
-                                f"A selected variant for "
-                                f"{product.name} is no longer available."
-                            )
-                        }
-                    )
+            current_stock = int(
+                variant.stock or 0
+            )
 
-                current_stock = int(
-                    variant.stock or 0
+            if current_stock < quantity:
+
+                raise serializers.ValidationError(
+                    {
+                        "items": (
+                            f"Only {current_stock} "
+                            f"item(s) are available "
+                            f"for {product.name}."
+                        )
+                    }
                 )
-
-                if current_stock < quantity:
-                    raise serializers.ValidationError(
-                        {
-                            "items": (
-                                f"Only {current_stock} item(s) "
-                                f"are available for {product.name}."
-                            )
-                        }
-                    )
 
             # Existing project pricing preserved
             unit_price = Decimal(
@@ -737,24 +1009,34 @@ class CheckoutSerializer(serializers.Serializer):
             )
 
             item_total = (
-                unit_price * quantity
+                unit_price
+                * quantity
             )
 
             subtotal += item_total
 
             prepared_items.append(
                 {
-                    "product": product,
-                    "variant": variant,
-                    "quantity": quantity,
-                    "unit_price": unit_price,
-                    "total_price": item_total,
+                    "product":
+                        product,
+
+                    "variant":
+                        variant,
+
+                    "quantity":
+                        quantity,
+
+                    "unit_price":
+                        unit_price,
+
+                    "total_price":
+                        item_total,
                 }
             )
 
-        # =====================================================
-        # Coupon Validation and Discount Calculation
-        # =====================================================
+        # =================================================
+        # Coupon
+        # =================================================
 
         coupon = None
 
@@ -766,11 +1048,20 @@ class CheckoutSerializer(serializers.Serializer):
             or ""
         ).strip().upper()
 
-        discount_amount = Decimal("0.00")
-        shipping_charge = Decimal("0.00")
-        tax_amount = Decimal("0.00")
+        discount_amount = Decimal(
+            "0.00"
+        )
+
+        shipping_charge = Decimal(
+            "0.00"
+        )
+
+        tax_amount = Decimal(
+            "0.00"
+        )
 
         if coupon_code:
+
             coupon = (
                 Coupon.objects
                 .select_for_update()
@@ -781,35 +1072,56 @@ class CheckoutSerializer(serializers.Serializer):
             )
 
             if coupon is None:
+
                 raise serializers.ValidationError(
                     {
-                        "coupon_code": (
+                        "coupon_code":
                             "Invalid coupon code."
-                        )
                     }
                 )
 
-            coupon_error = coupon.get_validation_error(
-                subtotal=subtotal,
-                user=user,
+            coupon_error = (
+                coupon.get_validation_error(
+                    subtotal=subtotal,
+                    user=user,
+                )
             )
 
             if coupon_error:
+
                 raise serializers.ValidationError(
                     {
-                        "coupon_code": coupon_error,
+                        "coupon_code":
+                            coupon_error,
                     }
                 )
 
-            discount_amount = coupon.calculate_discount(
-                subtotal
+            discount_amount = (
+                coupon.calculate_discount(
+                    subtotal
+                )
             )
 
             coupon_code = coupon.code
 
-        # Rs. 999 se kam subtotal par Rs. 99 delivery
-        if subtotal < Decimal("999.00"):
-            shipping_charge = Decimal("99.00")
+        # =================================================
+        # Shipping Charge
+        # =================================================
+        #
+        # Current business rule preserved:
+        # Below Rs. 999 -> Rs. 99 shipping.
+        #
+        # Later this can be replaced with live courier
+        # rate calculation.
+        # =================================================
+
+        if subtotal < Decimal(
+            "999.00"
+        ):
+
+            shipping_charge = Decimal(
+                "99.00"
+            )
 
         total_amount = (
             subtotal
@@ -820,114 +1132,245 @@ class CheckoutSerializer(serializers.Serializer):
             Decimal("0.01")
         )
 
-        if total_amount < Decimal("0.00"):
-            total_amount = Decimal("0.00")
+        if total_amount < Decimal(
+            "0.00"
+        ):
+            total_amount = Decimal(
+                "0.00"
+            )
+
+        # =================================================
+        # Create Order
+        # =================================================
 
         order = Order.objects.create(
             user=user,
+
             shipping_address=shipping_address,
 
-            full_name=validated_data["full_name"],
-            phone=validated_data["phone"],
+            full_name=validated_data[
+                "full_name"
+            ],
+
+            phone=validated_data[
+                "phone"
+            ],
+
             alternate_phone=validated_data.get(
                 "alternate_phone",
                 "",
             ),
+
             address_line_1=validated_data[
                 "address_line_1"
             ],
+
             address_line_2=validated_data.get(
                 "address_line_2",
                 "",
             ),
+
             landmark=validated_data.get(
                 "landmark",
                 "",
             ),
-            city=validated_data["city"],
-            state=validated_data["state"],
+
+            city=validated_data[
+                "city"
+            ],
+
+            state=validated_data[
+                "state"
+            ],
+
             postal_code=validated_data[
                 "postal_code"
             ],
+
             country=validated_data.get(
                 "country",
                 "India",
             ),
 
             subtotal=subtotal,
+
             discount_amount=discount_amount,
+
             shipping_charge=shipping_charge,
+
             tax_amount=tax_amount,
+
             total_amount=total_amount,
 
             coupon_code=coupon_code,
 
             status="pending",
+
             payment_method=payment_method,
+
             payment_status="pending",
 
             customer_note=validated_data.get(
                 "customer_note",
                 "",
             ),
+
+            shipping_status="",
         )
 
+        # =================================================
+        # Create Order Items / Deduct Stock
+        # =================================================
+
         for prepared_item in prepared_items:
-            product = prepared_item["product"]
-            variant = prepared_item["variant"]
-            quantity = prepared_item["quantity"]
+
+            product = prepared_item[
+                "product"
+            ]
+
+            variant = prepared_item[
+                "variant"
+            ]
+
+            quantity = prepared_item[
+                "quantity"
+            ]
 
             product_image = ""
 
-            if getattr(product, "main_image", None):
+            if getattr(
+                product,
+                "main_image",
+                None,
+            ):
+
                 try:
                     product_image = (
                         product.main_image.url
                     )
-                except (ValueError, AttributeError):
+
+                except (
+                    ValueError,
+                    AttributeError,
+                ):
                     product_image = ""
 
-            order_item = OrderItem.objects.create(
-                order=order,
-                product=product,
-                variant=variant,
+            order_item = (
+                OrderItem.objects.create(
+                    order=order,
 
-                product_name=product.name,
-                product_sku=getattr(product, "sku", "") or "",
-                variant_sku=getattr(variant, "sku", "") or "",
-                color=getattr(variant, "color", "") or "",
-                size=getattr(variant, "size", "") or "",
+                    product=product,
 
-                product_image=product_image,
-                unit_price=prepared_item["unit_price"],
-                quantity=quantity,
-                total_price=prepared_item["total_price"],
+                    variant=variant,
+
+                    product_name=product.name,
+
+                    product_sku=(
+                        getattr(
+                            product,
+                            "sku",
+                            "",
+                        )
+                        or ""
+                    ),
+
+                    variant_sku=(
+                        getattr(
+                            variant,
+                            "sku",
+                            "",
+                        )
+                        or ""
+                    ),
+
+                    color=(
+                        getattr(
+                            variant,
+                            "color",
+                            "",
+                        )
+                        or ""
+                    ),
+
+                    size=(
+                        getattr(
+                            variant,
+                            "size",
+                            "",
+                        )
+                        or ""
+                    ),
+
+                    product_image=product_image,
+
+                    unit_price=prepared_item[
+                        "unit_price"
+                    ],
+
+                    quantity=quantity,
+
+                    total_price=prepared_item[
+                        "total_price"
+                    ],
+                )
             )
 
-            stock_before = int(variant.stock or 0)
-            stock_after = stock_before - quantity
+            stock_before = int(
+                variant.stock or 0
+            )
+
+            stock_after = (
+                stock_before
+                - quantity
+            )
 
             variant.stock = stock_after
-            variant.save(update_fields=["stock"])
+
+            variant.save(
+                update_fields=[
+                    "stock",
+                ]
+            )
 
             InventoryTransaction.objects.create(
                 variant=variant,
+
                 product=product,
+
                 order=order,
+
                 order_item=order_item,
+
                 transaction_type="sale",
+
                 quantity_change=-quantity,
+
                 stock_before=stock_before,
+
                 reference=order.order_number,
-                note="Stock deducted during checkout.",
+
+                note=(
+                    "Stock deducted during checkout."
+                ),
+
                 metadata={
-                    "source": "checkout",
-                    "payment_method": payment_method,
+                    "source":
+                        "checkout",
+
+                    "payment_method":
+                        payment_method,
                 },
+
                 created_by=user,
             )
 
-            sync_low_stock_alert(variant)
+            sync_low_stock_alert(
+                variant
+            )
+
+        # =================================================
+        # Payment Record
+        # =================================================
 
         payment_record_status = (
             "pending"
@@ -943,11 +1386,12 @@ class CheckoutSerializer(serializers.Serializer):
             status=payment_record_status,
         )
 
-        # =====================================================
-        # Coupon Usage Record
-        # =====================================================
+        # =================================================
+        # Coupon Usage
+        # =================================================
 
         if coupon is not None:
+
             CouponUsage.objects.create(
                 coupon=coupon,
                 user=user,
@@ -958,22 +1402,33 @@ class CheckoutSerializer(serializers.Serializer):
             Coupon.objects.filter(
                 pk=coupon.pk,
             ).update(
-                used_count=F("used_count") + 1
+                used_count=(
+                    F("used_count")
+                    + 1
+                )
             )
 
         return order
 
-    def to_representation(self, instance):
+    def to_representation(
+        self,
+        instance,
+    ):
+
         return OrderSerializer(
             instance,
             context=self.context,
         ).data
 
+
 # =========================================================
 # Admin Order Management
 # =========================================================
 
-class AdminOrderListSerializer(serializers.ModelSerializer):
+class AdminOrderListSerializer(
+    serializers.ModelSerializer
+):
+
     total_items = serializers.IntegerField(
         read_only=True,
     )
@@ -984,8 +1439,18 @@ class AdminOrderListSerializer(serializers.ModelSerializer):
         allow_null=True,
     )
 
+    has_shipment = serializers.BooleanField(
+        read_only=True,
+    )
+
+    can_track = serializers.BooleanField(
+        read_only=True,
+    )
+
     class Meta:
+
         model = Order
+
         fields = (
             "id",
             "order_number",
@@ -994,26 +1459,50 @@ class AdminOrderListSerializer(serializers.ModelSerializer):
             "customer_email",
             "city",
             "state",
+
             "status",
             "payment_method",
             "payment_status",
+
             "subtotal",
             "discount_amount",
             "shipping_charge",
             "tax_amount",
             "total_amount",
+
             "courier_name",
+            "courier_service",
             "tracking_id",
+            "awb_code",
+            "shipment_id",
+            "shipping_order_id",
+            "shipping_status",
+            "tracking_url",
+            "pickup_scheduled",
             "estimated_delivery",
+
             "placed_at",
             "updated_at",
+            "shipped_at",
+            "out_for_delivery_at",
+            "delivered_at",
+
             "total_items",
+            "has_shipment",
+            "can_track",
         )
 
         read_only_fields = fields
 
 
-class AdminOrderDetailSerializer(OrderSerializer):
+# =========================================================
+# Admin Order Detail
+# =========================================================
+
+class AdminOrderDetailSerializer(
+    OrderSerializer
+):
+
     customer_email = serializers.EmailField(
         source="user.email",
         read_only=True,
@@ -1026,92 +1515,180 @@ class AdminOrderDetailSerializer(OrderSerializer):
         allow_null=True,
     )
 
-    class Meta(OrderSerializer.Meta):
-        fields = OrderSerializer.Meta.fields + (
-            "customer_email",
-            "customer_username",
+    class Meta(
+        OrderSerializer.Meta
+    ):
+
+        fields = (
+            OrderSerializer.Meta.fields
+            + (
+                "customer_email",
+                "customer_username",
+            )
         )
 
         read_only_fields = fields
 
 
-class AdminOrderUpdateSerializer(serializers.ModelSerializer):
+# =========================================================
+# Admin Full Order Update
+# =========================================================
+
+class AdminOrderUpdateSerializer(
+    serializers.ModelSerializer
+):
+
     class Meta:
+
         model = Order
+
         fields = (
             "status",
             "payment_status",
             "admin_note",
+
             "courier_name",
+            "courier_service",
+
             "tracking_id",
+            "awb_code",
+
+            "shipment_id",
+            "shipping_order_id",
+
+            "shipping_status",
+
+            "tracking_url",
+            "shipping_label_url",
+            "manifest_url",
+
+            "pickup_token",
+            "pickup_scheduled",
+            "pickup_scheduled_at",
+
             "estimated_delivery",
         )
 
-    def validate(self, attrs):
+    def validate(
+        self,
+        attrs,
+    ):
+
         instance = self.instance
+
         new_status = attrs.get(
             "status",
-            instance.status if instance else None,
+            (
+                instance.status
+                if instance
+                else None
+            ),
         )
 
         courier_name = attrs.get(
             "courier_name",
-            instance.courier_name if instance else "",
+            (
+                instance.courier_name
+                if instance
+                else ""
+            ),
         )
 
         tracking_id = attrs.get(
             "tracking_id",
-            instance.tracking_id if instance else "",
+            (
+                instance.tracking_id
+                if instance
+                else ""
+            ),
         )
+
+        awb_code = attrs.get(
+            "awb_code",
+            (
+                instance.awb_code
+                if instance
+                else ""
+            ),
+        )
+
+        # =================================================
+        # Shipping Validation
+        # =================================================
 
         if new_status in {
             "shipped",
+            "in_transit",
             "out_for_delivery",
             "delivered",
         }:
+
             if not courier_name:
+
                 raise serializers.ValidationError(
                     {
                         "courier_name": (
-                            "Courier name is required before "
-                            "marking an order as shipped."
+                            "Courier name is required "
+                            "before marking an order "
+                            "as shipped."
                         )
                     }
                 )
 
-            if not tracking_id:
+            if not (
+                tracking_id
+                or awb_code
+            ):
+
                 raise serializers.ValidationError(
                     {
                         "tracking_id": (
-                            "Tracking ID is required before "
-                            "marking an order as shipped."
+                            "Tracking ID or AWB code "
+                            "is required before marking "
+                            "an order as shipped."
                         )
                     }
                 )
+
+        # =================================================
+        # Cancelled Order Protection
+        # =================================================
 
         if (
             instance
             and instance.status == "cancelled"
             and new_status != "cancelled"
         ):
+
             raise serializers.ValidationError(
                 {
                     "status": (
-                        "A cancelled order cannot be reopened."
+                        "A cancelled order "
+                        "cannot be reopened."
                     )
                 }
             )
+
+        # =================================================
+        # Paid Order Cancellation
+        # =================================================
+        #
+        # Existing safety rule preserved.
+        # Refund flow can later handle paid cancellation.
+        # =================================================
 
         if (
             instance
             and instance.payment_status == "paid"
             and new_status == "cancelled"
         ):
+
             raise serializers.ValidationError(
                 {
                     "status": (
-                        "A paid order cannot be cancelled until "
-                        "the refund flow is completed."
+                        "A paid order cannot be "
+                        "cancelled until the refund "
+                        "flow is completed."
                     )
                 }
             )
@@ -1119,69 +1696,166 @@ class AdminOrderUpdateSerializer(serializers.ModelSerializer):
         return attrs
 
     @transaction.atomic
-    def update(self, instance, validated_data):
-        from django.utils import timezone
+    def update(
+        self,
+        instance,
+        validated_data,
+    ):
 
-        previous_status = instance.status
+        previous_status = (
+            instance.status
+        )
+
         new_status = validated_data.get(
             "status",
             previous_status,
         )
 
-        for field, value in validated_data.items():
-            setattr(instance, field, value)
+        for (
+            field,
+            value,
+        ) in validated_data.items():
+
+            setattr(
+                instance,
+                field,
+                value,
+            )
 
         now = timezone.now()
 
+        # =================================================
+        # Shipped
+        # =================================================
+
         if (
-            new_status == "shipped"
-            and previous_status != "shipped"
+            new_status
+            in {
+                "shipped",
+                "in_transit",
+                "out_for_delivery",
+                "delivered",
+            }
             and instance.shipped_at is None
         ):
+
             instance.shipped_at = now
+
+        # =================================================
+        # Out For Delivery
+        # =================================================
+
+        if (
+            new_status == "out_for_delivery"
+            and previous_status
+            != "out_for_delivery"
+            and instance.out_for_delivery_at is None
+        ):
+
+            instance.out_for_delivery_at = now
+
+        # =================================================
+        # Delivered
+        # =================================================
 
         if (
             new_status == "delivered"
             and previous_status != "delivered"
         ):
+
             instance.delivered_at = now
+
+        # =================================================
+        # Cancelled
+        # =================================================
 
         if (
             new_status == "cancelled"
             and previous_status != "cancelled"
         ):
+
             instance.cancelled_at = now
+
+        # =================================================
+        # Clear timestamps if status moved backwards
+        # =================================================
 
         if new_status != "delivered":
             instance.delivered_at = None
 
+        if new_status not in {
+            "out_for_delivery",
+            "delivered",
+        }:
+            instance.out_for_delivery_at = None
+
         if new_status != "cancelled":
             instance.cancelled_at = None
 
-        update_fields = set(validated_data.keys())
-        update_fields.add("updated_at")
+        # =================================================
+        # Shipping status fallback
+        # =================================================
 
-        if instance.shipped_at is not None:
-            update_fields.add("shipped_at")
+        if (
+            new_status
+            in {
+                "shipped",
+                "in_transit",
+                "out_for_delivery",
+                "delivered",
+            }
+            and not instance.shipping_status
+        ):
 
-        update_fields.add("delivered_at")
-        update_fields.add("cancelled_at")
+            instance.shipping_status = (
+                new_status
+            )
+
+        update_fields = set(
+            validated_data.keys()
+        )
+
+        update_fields.update(
+            {
+                "updated_at",
+                "shipped_at",
+                "out_for_delivery_at",
+                "delivered_at",
+                "cancelled_at",
+                "shipping_status",
+            }
+        )
 
         instance.save(
-            update_fields=list(update_fields),
+            update_fields=list(
+                update_fields
+            ),
         )
 
         return instance
 
 
-class AdminOrderStatusSerializer(serializers.ModelSerializer):
+# =========================================================
+# Admin Status-Only Update
+# =========================================================
+
+class AdminOrderStatusSerializer(
+    serializers.ModelSerializer
+):
+
     class Meta:
+
         model = Order
+
         fields = (
             "status",
         )
 
-    def validate_status(self, value):
+    def validate_status(
+        self,
+        value,
+    ):
+
         instance = self.instance
 
         if (
@@ -1189,6 +1863,7 @@ class AdminOrderStatusSerializer(serializers.ModelSerializer):
             and instance.status == "cancelled"
             and value != "cancelled"
         ):
+
             raise serializers.ValidationError(
                 "A cancelled order cannot be reopened."
             )
@@ -1198,34 +1873,53 @@ class AdminOrderStatusSerializer(serializers.ModelSerializer):
             and instance.payment_status == "paid"
             and value == "cancelled"
         ):
+
             raise serializers.ValidationError(
-                "A paid order cannot be cancelled until the refund flow "
-                "is completed."
+                "A paid order cannot be cancelled "
+                "until the refund flow is completed."
             )
 
         if value in {
             "shipped",
+            "in_transit",
             "out_for_delivery",
             "delivered",
         }:
+
             if not instance.courier_name:
+
                 raise serializers.ValidationError(
-                    "Add the courier name before updating this status."
+                    "Add the courier name before "
+                    "updating this status."
                 )
 
-            if not instance.tracking_id:
+            if not (
+                instance.tracking_id
+                or instance.awb_code
+            ):
+
                 raise serializers.ValidationError(
-                    "Add the tracking ID before updating this status."
+                    "Add the tracking ID or AWB code "
+                    "before updating this status."
                 )
 
         return value
 
     @transaction.atomic
-    def update(self, instance, validated_data):
-        from django.utils import timezone
+    def update(
+        self,
+        instance,
+        validated_data,
+    ):
 
-        previous_status = instance.status
-        new_status = validated_data["status"]
+        previous_status = (
+            instance.status
+        )
+
+        new_status = validated_data[
+            "status"
+        ]
+
         now = timezone.now()
 
         instance.status = new_status
@@ -1235,31 +1929,125 @@ class AdminOrderStatusSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+        # =================================================
+        # Shipped Timestamp
+        # =================================================
+
         if (
-            new_status == "shipped"
-            and previous_status != "shipped"
+            new_status
+            in {
+                "shipped",
+                "in_transit",
+                "out_for_delivery",
+                "delivered",
+            }
             and instance.shipped_at is None
         ):
+
             instance.shipped_at = now
-            update_fields.append("shipped_at")
+
+            update_fields.append(
+                "shipped_at"
+            )
+
+        # =================================================
+        # Out For Delivery Timestamp
+        # =================================================
+
+        if (
+            new_status == "out_for_delivery"
+            and instance.out_for_delivery_at is None
+        ):
+
+            instance.out_for_delivery_at = now
+
+            update_fields.append(
+                "out_for_delivery_at"
+            )
+
+        elif (
+            new_status
+            not in {
+                "out_for_delivery",
+                "delivered",
+            }
+            and instance.out_for_delivery_at
+            is not None
+        ):
+
+            instance.out_for_delivery_at = None
+
+            update_fields.append(
+                "out_for_delivery_at"
+            )
+
+        # =================================================
+        # Delivered Timestamp
+        # =================================================
 
         if new_status == "delivered":
-            instance.delivered_at = now
-            update_fields.append("delivered_at")
+
+            if instance.delivered_at is None:
+                instance.delivered_at = now
+
+            update_fields.append(
+                "delivered_at"
+            )
+
         elif instance.delivered_at is not None:
+
             instance.delivered_at = None
-            update_fields.append("delivered_at")
+
+            update_fields.append(
+                "delivered_at"
+            )
+
+        # =================================================
+        # Cancelled Timestamp
+        # =================================================
 
         if new_status == "cancelled":
-            instance.cancelled_at = now
-            update_fields.append("cancelled_at")
+
+            if instance.cancelled_at is None:
+                instance.cancelled_at = now
+
+            update_fields.append(
+                "cancelled_at"
+            )
+
         elif instance.cancelled_at is not None:
+
             instance.cancelled_at = None
-            update_fields.append("cancelled_at")
+
+            update_fields.append(
+                "cancelled_at"
+            )
+
+        # =================================================
+        # Keep shipping status aligned for manual updates
+        # =================================================
+
+        if new_status in {
+            "shipped",
+            "in_transit",
+            "out_for_delivery",
+            "delivered",
+        }:
+
+            instance.shipping_status = (
+                new_status
+            )
+
+            update_fields.append(
+                "shipping_status"
+            )
 
         instance.save(
-            update_fields=list(dict.fromkeys(update_fields)),
+            update_fields=list(
+                dict.fromkeys(
+                    update_fields
+                )
+            ),
         )
 
         return instance
-

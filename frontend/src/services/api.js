@@ -189,6 +189,28 @@ function createQueryString(
 
 
 // =========================================================
+// Common Validation Helper
+// =========================================================
+
+function requireValue(
+  value,
+  message
+) {
+  if (
+    value === undefined ||
+    value === null ||
+    String(
+      value
+    ).trim() === ""
+  ) {
+    throw new Error(
+      message
+    );
+  }
+}
+
+
+// =========================================================
 // Response Helpers
 // =========================================================
 
@@ -931,6 +953,12 @@ export async function fetchProducts(
 export async function fetchProductById(
   id
 ) {
+  requireValue(
+    id,
+    "Product ID is required."
+  );
+
+
   return apiRequest(
     `/products/${encodeURIComponent(
       id
@@ -1150,18 +1178,10 @@ export async function fetchAdminProducts(
 export async function fetchAdminProductDetail(
   productId
 ) {
-  if (
-    productId ===
-      undefined ||
-    productId ===
-      null ||
-    productId ===
-      ""
-  ) {
-    throw new Error(
-      "Product ID is required."
-    );
-  }
+  requireValue(
+    productId,
+    "Product ID is required."
+  );
 
 
   return apiRequest(
@@ -1223,18 +1243,10 @@ export async function updateAdminProduct(
   productId,
   payload
 ) {
-  if (
-    productId ===
-      undefined ||
-    productId ===
-      null ||
-    productId ===
-      ""
-  ) {
-    throw new Error(
-      "Product ID is required."
-    );
-  }
+  requireValue(
+    productId,
+    "Product ID is required."
+  );
 
 
   if (
@@ -1266,18 +1278,10 @@ export async function updateAdminProduct(
 export async function deleteAdminProduct(
   productId
 ) {
-  if (
-    productId ===
-      undefined ||
-    productId ===
-      null ||
-    productId ===
-      ""
-  ) {
-    throw new Error(
-      "Product ID is required."
-    );
-  }
+  requireValue(
+    productId,
+    "Product ID is required."
+  );
 
 
   return apiRequest(
@@ -1347,18 +1351,10 @@ export async function fetchAdminProductVariants(
 export async function fetchAdminProductVariantDetail(
   variantId
 ) {
-  if (
-    variantId ===
-      undefined ||
-    variantId ===
-      null ||
-    variantId ===
-      ""
-  ) {
-    throw new Error(
-      "Variant ID is required."
-    );
-  }
+  requireValue(
+    variantId,
+    "Variant ID is required."
+  );
 
 
   return apiRequest(
@@ -1400,18 +1396,10 @@ export async function updateAdminProductVariant(
   variantId,
   payload
 ) {
-  if (
-    variantId ===
-      undefined ||
-    variantId ===
-      null ||
-    variantId ===
-      ""
-  ) {
-    throw new Error(
-      "Variant ID is required."
-    );
-  }
+  requireValue(
+    variantId,
+    "Variant ID is required."
+  );
 
 
   if (
@@ -1443,18 +1431,10 @@ export async function updateAdminProductVariant(
 export async function deleteAdminProductVariant(
   variantId
 ) {
-  if (
-    variantId ===
-      undefined ||
-    variantId ===
-      null ||
-    variantId ===
-      ""
-  ) {
-    throw new Error(
-      "Variant ID is required."
-    );
-  }
+  requireValue(
+    variantId,
+    "Variant ID is required."
+  );
 
 
   return apiRequest(
@@ -1524,18 +1504,10 @@ export async function fetchAdminProductImages(
 export async function fetchAdminProductImageDetail(
   imageId
 ) {
-  if (
-    imageId ===
-      undefined ||
-    imageId ===
-      null ||
-    imageId ===
-      ""
-  ) {
-    throw new Error(
-      "Image ID is required."
-    );
-  }
+  requireValue(
+    imageId,
+    "Image ID is required."
+  );
 
 
   return apiRequest(
@@ -1581,18 +1553,10 @@ export async function updateAdminProductImage(
   imageId,
   payload
 ) {
-  if (
-    imageId ===
-      undefined ||
-    imageId ===
-      null ||
-    imageId ===
-      ""
-  ) {
-    throw new Error(
-      "Image ID is required."
-    );
-  }
+  requireValue(
+    imageId,
+    "Image ID is required."
+  );
 
 
   if (
@@ -1628,18 +1592,10 @@ export async function updateAdminProductImage(
 export async function deleteAdminProductImage(
   imageId
 ) {
-  if (
-    imageId ===
-      undefined ||
-    imageId ===
-      null ||
-    imageId ===
-      ""
-  ) {
-    throw new Error(
-      "Image ID is required."
-    );
-  }
+  requireValue(
+    imageId,
+    "Image ID is required."
+  );
 
 
   return apiRequest(
@@ -1985,6 +1941,12 @@ export async function fetchMyOrders() {
 export async function fetchOrder(
   orderNumber
 ) {
+  requireValue(
+    orderNumber,
+    "Order number is required."
+  );
+
+
   return apiRequest(
     `/orders/my-orders/${encodeURIComponent(
       orderNumber
@@ -1993,9 +1955,36 @@ export async function fetchOrder(
 }
 
 
+// =========================================================
+// Customer Order Tracking
+// =========================================================
+
+export async function fetchOrderTracking(
+  orderNumber
+) {
+  requireValue(
+    orderNumber,
+    "Order number is required."
+  );
+
+
+  return apiRequest(
+    `/orders/my-orders/${encodeURIComponent(
+      orderNumber
+    )}/tracking/`
+  );
+}
+
+
 export async function cancelOrder(
   orderNumber
 ) {
+  requireValue(
+    orderNumber,
+    "Order number is required."
+  );
+
+
   return apiRequest(
     `/orders/my-orders/${encodeURIComponent(
       orderNumber
@@ -2015,6 +2004,12 @@ export async function cancelOrder(
 export async function downloadInvoice(
   orderNumber
 ) {
+  requireValue(
+    orderNumber,
+    "Order number is required."
+  );
+
+
   let token =
     getAccessToken();
 
@@ -2101,6 +2096,42 @@ export async function trackGuestOrder(
   orderNumber,
   phone
 ) {
+  const cleanedOrderNumber =
+    String(
+      orderNumber ||
+      ""
+    ).trim();
+
+
+  const cleanedPhone =
+    String(
+      phone ||
+      ""
+    ).replace(
+      /\D/g,
+      ""
+    );
+
+
+  if (
+    !cleanedOrderNumber
+  ) {
+    throw new Error(
+      "Order number is required."
+    );
+  }
+
+
+  if (
+    cleanedPhone.length !==
+    10
+  ) {
+    throw new Error(
+      "Please enter a valid 10-digit mobile number."
+    );
+  }
+
+
   return apiRequest(
     "/orders/guest-order/",
     {
@@ -2110,16 +2141,10 @@ export async function trackGuestOrder(
       body:
         JSON.stringify({
           order_number:
-            orderNumber,
+            cleanedOrderNumber,
 
           phone:
-            String(
-              phone ||
-              ""
-            ).replace(
-              /\D/g,
-              ""
-            ),
+            cleanedPhone,
         }),
     }
   );
@@ -2159,6 +2184,12 @@ export async function updateAddress(
   id,
   data
 ) {
+  requireValue(
+    id,
+    "Address ID is required."
+  );
+
+
   return apiRequest(
     `/orders/addresses/${encodeURIComponent(
       id
@@ -2179,6 +2210,12 @@ export async function updateAddress(
 export async function deleteAddress(
   id
 ) {
+  requireValue(
+    id,
+    "Address ID is required."
+  );
+
+
   return apiRequest(
     `/orders/addresses/${encodeURIComponent(
       id
@@ -2569,6 +2606,12 @@ export async function fetchAdminOrders(
 export async function fetchAdminOrderDetail(
   orderNumber
 ) {
+  requireValue(
+    orderNumber,
+    "Order number is required."
+  );
+
+
   return apiRequest(
     `/orders/admin/orders/${encodeURIComponent(
       orderNumber
@@ -2581,6 +2624,12 @@ export async function updateAdminOrder(
   orderNumber,
   payload
 ) {
+  requireValue(
+    orderNumber,
+    "Order number is required."
+  );
+
+
   return apiRequest(
     `/orders/admin/orders/${encodeURIComponent(
       orderNumber
@@ -2602,6 +2651,12 @@ export async function updateAdminOrderStatus(
   orderNumber,
   orderStatus
 ) {
+  requireValue(
+    orderNumber,
+    "Order number is required."
+  );
+
+
   return apiRequest(
     `/orders/admin/orders/${encodeURIComponent(
       orderNumber
@@ -2623,6 +2678,271 @@ export async function updateAdminOrderStatus(
 export async function fetchAdminOrderDashboard() {
   return apiRequest(
     "/orders/admin/orders/dashboard/"
+  );
+}
+
+
+// =========================================================
+// Admin Order Shipping
+// =========================================================
+
+export async function fetchAdminOrderShipping(
+  orderNumber
+) {
+  requireValue(
+    orderNumber,
+    "Order number is required."
+  );
+
+
+  return apiRequest(
+    `/orders/admin/orders/${encodeURIComponent(
+      orderNumber
+    )}/shipping/`
+  );
+}
+
+
+// =========================================================
+// Shiprocket - Courier Serviceability
+// =========================================================
+
+export async function checkAdminOrderServiceability(
+  orderNumber,
+  pickupPostcode = "110059"
+) {
+  requireValue(
+    orderNumber,
+    "Order number is required."
+  );
+
+  requireValue(
+    pickupPostcode,
+    "Pickup postcode is required."
+  );
+
+
+  return apiRequest(
+    `/orders/admin/orders/${encodeURIComponent(
+      orderNumber
+    )}/shiprocket/serviceability/`,
+    {
+      method: "POST",
+
+      body: JSON.stringify({
+        pickup_postcode: String(
+          pickupPostcode
+        ).trim(),
+      }),
+    }
+  );
+}
+
+
+// Compatibility Alias
+export async function fetchAdminShiprocketServiceability(
+  orderNumber,
+  pickupPostcode = "110059"
+) {
+  return checkAdminOrderServiceability(
+    orderNumber,
+    pickupPostcode
+  );
+}
+
+
+// =========================================================
+// Shiprocket - Create Order
+// =========================================================
+
+export async function createAdminShiprocketOrder(
+  orderNumber
+) {
+  requireValue(
+    orderNumber,
+    "Order number is required."
+  );
+
+
+  return apiRequest(
+    `/orders/admin/orders/${encodeURIComponent(
+      orderNumber
+    )}/shiprocket/create-order/`,
+    {
+      method:
+        "POST",
+    }
+  );
+}
+
+
+// =========================================================
+// Shiprocket - Assign AWB
+// =========================================================
+
+export async function assignAdminShiprocketAWB(
+  orderNumber,
+  courierId = null
+) {
+  requireValue(
+    orderNumber,
+    "Order number is required."
+  );
+
+
+  const payload =
+    {};
+
+
+  if (
+    courierId !==
+      undefined &&
+    courierId !==
+      null &&
+    courierId !==
+      ""
+  ) {
+    payload.courier_id =
+      courierId;
+  }
+
+
+  return apiRequest(
+    `/orders/admin/orders/${encodeURIComponent(
+      orderNumber
+    )}/shiprocket/assign-awb/`,
+    {
+      method:
+        "POST",
+
+      body:
+        JSON.stringify(
+          payload
+        ),
+    }
+  );
+}
+
+
+// =========================================================
+// Shiprocket - Schedule Pickup
+// IMPORTANT:
+// Backend URL is /shiprocket/pickup/
+// =========================================================
+
+export async function scheduleAdminShiprocketPickup(
+  orderNumber
+) {
+  requireValue(
+    orderNumber,
+    "Order number is required."
+  );
+
+
+  return apiRequest(
+    `/orders/admin/orders/${encodeURIComponent(
+      orderNumber
+    )}/shiprocket/pickup/`,
+    {
+      method:
+        "POST",
+    }
+  );
+}
+
+
+// =========================================================
+// Shiprocket - Generate Label
+// =========================================================
+
+export async function generateAdminShiprocketLabel(
+  orderNumber
+) {
+  requireValue(
+    orderNumber,
+    "Order number is required."
+  );
+
+
+  return apiRequest(
+    `/orders/admin/orders/${encodeURIComponent(
+      orderNumber
+    )}/shiprocket/label/`,
+    {
+      method:
+        "POST",
+    }
+  );
+}
+
+
+// =========================================================
+// Shiprocket - Generate Manifest
+// =========================================================
+
+export async function generateAdminShiprocketManifest(
+  orderNumber
+) {
+  requireValue(
+    orderNumber,
+    "Order number is required."
+  );
+
+
+  return apiRequest(
+    `/orders/admin/orders/${encodeURIComponent(
+      orderNumber
+    )}/shiprocket/manifest/`,
+    {
+      method:
+        "POST",
+    }
+  );
+}
+
+
+// =========================================================
+// Shiprocket - Refresh Tracking
+// =========================================================
+
+export async function refreshAdminShiprocketTracking(
+  orderNumber
+) {
+  requireValue(
+    orderNumber,
+    "Order number is required."
+  );
+
+
+  return apiRequest(
+    `/orders/admin/orders/${encodeURIComponent(
+      orderNumber
+    )}/shiprocket/tracking/`,
+    {
+      method:
+        "POST",
+    }
+  );
+}
+
+
+// =========================================================
+// Existing Internal Admin Shipping Label
+// =========================================================
+
+export async function fetchAdminShippingLabel(
+  orderNumber
+) {
+  requireValue(
+    orderNumber,
+    "Order number is required."
+  );
+
+
+  return apiRequest(
+    `/orders/admin/orders/${encodeURIComponent(
+      orderNumber
+    )}/shipping-label/`
   );
 }
 

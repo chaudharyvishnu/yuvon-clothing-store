@@ -10,6 +10,7 @@ from django.db import models
 # =========================================================
 
 class ShippingAddress(models.Model):
+
     ADDRESS_TYPE_CHOICES = (
         ("home", "Home"),
         ("work", "Work"),
@@ -85,12 +86,27 @@ class ShippingAddress(models.Model):
     )
 
     class Meta:
-        ordering = ("-is_default", "-created_at")
+        ordering = (
+            "-is_default",
+            "-created_at",
+        )
+
         verbose_name = "Shipping Address"
         verbose_name_plural = "Shipping Addresses"
+
         indexes = [
-            models.Index(fields=["user", "is_default"]),
-            models.Index(fields=["city", "state"]),
+            models.Index(
+                fields=[
+                    "user",
+                    "is_default",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "city",
+                    "state",
+                ]
+            ),
         ]
 
     def __str__(self):
@@ -99,8 +115,15 @@ class ShippingAddress(models.Model):
             f"{self.city}, {self.postal_code}"
         )
 
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
+    def save(
+        self,
+        *args,
+        **kwargs,
+    ):
+        super().save(
+            *args,
+            **kwargs,
+        )
 
         if self.is_default:
             ShippingAddress.objects.filter(
@@ -117,12 +140,14 @@ class ShippingAddress(models.Model):
 # =========================================================
 
 class Order(models.Model):
+
     STATUS_CHOICES = (
         ("pending", "Pending"),
         ("confirmed", "Confirmed"),
         ("processing", "Processing"),
         ("packed", "Packed"),
         ("shipped", "Shipped"),
+        ("in_transit", "In Transit"),
         ("out_for_delivery", "Out For Delivery"),
         ("delivered", "Delivered"),
         ("cancelled", "Cancelled"),
@@ -143,8 +168,15 @@ class Order(models.Model):
         ("paid", "Paid"),
         ("failed", "Failed"),
         ("refunded", "Refunded"),
-        ("partially_refunded", "Partially Refunded"),
+        (
+            "partially_refunded",
+            "Partially Refunded",
+        ),
     )
+
+    # =====================================================
+    # Basic Order Details
+    # =====================================================
 
     order_number = models.CharField(
         max_length=30,
@@ -169,8 +201,10 @@ class Order(models.Model):
         blank=True,
     )
 
-    # Address snapshot:
-    # Address baad me edit/delete ho tab bhi order ka address safe rahega.
+    # =====================================================
+    # Shipping Address Snapshot
+    # =====================================================
+
     full_name = models.CharField(
         max_length=150,
     )
@@ -214,6 +248,10 @@ class Order(models.Model):
         max_length=100,
         default="India",
     )
+
+    # =====================================================
+    # Price Details
+    # =====================================================
 
     subtotal = models.DecimalField(
         max_digits=12,
@@ -265,12 +303,20 @@ class Order(models.Model):
         blank=True,
     )
 
+    # =====================================================
+    # Order Status
+    # =====================================================
+
     status = models.CharField(
         max_length=30,
         choices=STATUS_CHOICES,
         default="pending",
         db_index=True,
     )
+
+    # =====================================================
+    # Payment
+    # =====================================================
 
     payment_method = models.CharField(
         max_length=30,
@@ -285,6 +331,10 @@ class Order(models.Model):
         db_index=True,
     )
 
+    # =====================================================
+    # Notes
+    # =====================================================
+
     customer_note = models.TextField(
         blank=True,
     )
@@ -293,9 +343,23 @@ class Order(models.Model):
         blank=True,
     )
 
-    # Courier Details
-    courier_name = models.CharField(
+    # =====================================================
+    # Shipping / Courier
+    # =====================================================
+
+    courier_company_id = models.CharField(
         max_length=100,
+        blank=True,
+        db_index=True,
+    )
+
+    courier_name = models.CharField(
+        max_length=150,
+        blank=True,
+    )
+
+    courier_service = models.CharField(
+        max_length=150,
         blank=True,
     )
 
@@ -305,7 +369,187 @@ class Order(models.Model):
         db_index=True,
     )
 
+    awb_code = models.CharField(
+        max_length=150,
+        blank=True,
+        db_index=True,
+    )
+
+    # =====================================================
+    # Shiprocket IDs
+    # =====================================================
+
+    shiprocket_order_id = models.CharField(
+        max_length=150,
+        blank=True,
+        db_index=True,
+    )
+
+    shiprocket_shipment_id = models.CharField(
+        max_length=150,
+        blank=True,
+        db_index=True,
+    )
+
+    # Generic compatibility fields.
+    # Existing code agar in names ko use karta hai to break nahi hoga.
+
+    shipment_id = models.CharField(
+        max_length=150,
+        blank=True,
+        db_index=True,
+    )
+
+    shipping_order_id = models.CharField(
+        max_length=150,
+        blank=True,
+        db_index=True,
+    )
+
+    shipping_status = models.CharField(
+        max_length=100,
+        blank=True,
+        db_index=True,
+    )
+
+    shipping_status_code = models.CharField(
+        max_length=50,
+        blank=True,
+    )
+
+    # =====================================================
+    # Tracking / Documents
+    # =====================================================
+
+    tracking_url = models.URLField(
+        max_length=1000,
+        blank=True,
+    )
+
+    shipping_label_url = models.URLField(
+        max_length=1000,
+        blank=True,
+    )
+
+    manifest_url = models.URLField(
+        max_length=1000,
+        blank=True,
+    )
+
+    # =====================================================
+    # Pickup
+    # =====================================================
+
+    pickup_token = models.CharField(
+        max_length=255,
+        blank=True,
+    )
+
+    pickup_scheduled = models.BooleanField(
+        default=False,
+    )
+
+    pickup_scheduled_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
     estimated_delivery = models.DateField(
+        null=True,
+        blank=True,
+    )
+
+    # =====================================================
+    # Package Information
+    # =====================================================
+
+    package_weight = models.DecimalField(
+        max_digits=8,
+        decimal_places=3,
+        default=0.500,
+        validators=[
+            MinValueValidator(0),
+        ],
+        help_text="Shipment weight in kilograms.",
+    )
+
+    package_length = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=10,
+        validators=[
+            MinValueValidator(0),
+        ],
+        help_text="Package length in centimetres.",
+    )
+
+    package_breadth = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=10,
+        validators=[
+            MinValueValidator(0),
+        ],
+        help_text="Package breadth in centimetres.",
+    )
+
+    package_height = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=5,
+        validators=[
+            MinValueValidator(0),
+        ],
+        help_text="Package height in centimetres.",
+    )
+
+    # =====================================================
+    # Shipping API Responses
+    # =====================================================
+
+    shipping_response = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
+    tracking_response = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
+    serviceability_response = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
+    awb_response = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
+    pickup_response = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
+    # =====================================================
+    # Timeline
+    # =====================================================
+
+    placed_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    shipment_created_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    awb_assigned_at = models.DateTimeField(
         null=True,
         blank=True,
     )
@@ -315,12 +559,14 @@ class Order(models.Model):
         blank=True,
     )
 
-    placed_at = models.DateTimeField(
-        auto_now_add=True,
+    in_transit_at = models.DateTimeField(
+        null=True,
+        blank=True,
     )
 
-    updated_at = models.DateTimeField(
-        auto_now=True,
+    out_for_delivery_at = models.DateTimeField(
+        null=True,
+        blank=True,
     )
 
     delivered_at = models.DateTimeField(
@@ -334,29 +580,84 @@ class Order(models.Model):
     )
 
     class Meta:
-        ordering = ("-placed_at",)
+
+        ordering = (
+            "-placed_at",
+        )
+
         verbose_name = "Order"
         verbose_name_plural = "Orders"
+
         indexes = [
-            models.Index(fields=["status", "placed_at"]),
-            models.Index(fields=["payment_status", "placed_at"]),
-            models.Index(fields=["user", "placed_at"]),
+            models.Index(
+                fields=[
+                    "status",
+                    "placed_at",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "payment_status",
+                    "placed_at",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "user",
+                    "placed_at",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "shipping_status",
+                    "placed_at",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "awb_code",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "shiprocket_shipment_id",
+                ]
+            ),
         ]
 
     def __str__(self):
         return self.order_number
 
-    def save(self, *args, **kwargs):
+    def save(
+        self,
+        *args,
+        **kwargs,
+    ):
         if not self.order_number:
-            self.order_number = self.generate_order_number()
+            self.order_number = (
+                self.generate_order_number()
+            )
 
-        super().save(*args, **kwargs)
+        super().save(
+            *args,
+            **kwargs,
+        )
 
     @staticmethod
     def generate_order_number():
-        unique_code = uuid.uuid4().hex[:10].upper()
+        unique_code = (
+            uuid.uuid4()
+            .hex[:10]
+            .upper()
+        )
 
-        return f"YUV-{unique_code}"
+        return (
+            f"YUV-{unique_code}"
+        )
+
+    # =====================================================
+    # Helpers
+    # =====================================================
 
     @property
     def total_items(self):
@@ -378,14 +679,17 @@ class Order(models.Model):
         ]
 
         return ", ".join(
-            part
+            str(part)
             for part in address_parts
             if part
         )
 
     @property
     def is_paid(self):
-        return self.payment_status == "paid"
+        return (
+            self.payment_status
+            == "paid"
+        )
 
     @property
     def is_cancellable(self):
@@ -395,8 +699,54 @@ class Order(models.Model):
                 "pending",
                 "confirmed",
                 "processing",
+                "packed",
             }
-            and not self.is_paid
+            and not self.has_shipment
+        )
+
+    @property
+    def has_shipment(self):
+        return bool(
+            self.shiprocket_shipment_id
+            or self.shipment_id
+            or self.awb_code
+            or self.tracking_id
+        )
+
+    @property
+    def has_awb(self):
+        return bool(
+            self.awb_code
+        )
+
+    @property
+    def can_track(self):
+        return bool(
+            self.awb_code
+            or self.tracking_id
+            or self.tracking_url
+        )
+
+    @property
+    def is_delivered(self):
+        return (
+            self.status
+            == "delivered"
+        )
+
+    @property
+    def is_cancelled(self):
+        return (
+            self.status
+            == "cancelled"
+        )
+
+    @property
+    def shiprocket_reference_id(self):
+        return (
+            self.shiprocket_shipment_id
+            or self.shipment_id
+            or ""
         )
 
 
@@ -405,6 +755,7 @@ class Order(models.Model):
 # =========================================================
 
 class OrderItem(models.Model):
+
     order = models.ForeignKey(
         Order,
         on_delete=models.CASCADE,
@@ -427,8 +778,10 @@ class OrderItem(models.Model):
         blank=True,
     )
 
-    # Product snapshot:
-    # Product name/price future me change ho tab order unchanged rahe.
+    # =====================================================
+    # Product Snapshot
+    # =====================================================
+
     product_name = models.CharField(
         max_length=255,
     )
@@ -454,7 +807,7 @@ class OrderItem(models.Model):
     )
 
     product_image = models.CharField(
-        max_length=500,
+        max_length=1000,
         blank=True,
     )
 
@@ -487,11 +840,19 @@ class OrderItem(models.Model):
     )
 
     class Meta:
-        ordering = ("id",)
+        ordering = (
+            "id",
+        )
+
         verbose_name = "Order Item"
         verbose_name_plural = "Order Items"
+
         indexes = [
-            models.Index(fields=["order"]),
+            models.Index(
+                fields=[
+                    "order",
+                ]
+            ),
         ]
 
     def __str__(self):
@@ -500,12 +861,20 @@ class OrderItem(models.Model):
             f"x {self.quantity}"
         )
 
-    def save(self, *args, **kwargs):
+    def save(
+        self,
+        *args,
+        **kwargs,
+    ):
         self.total_price = (
-            self.unit_price * self.quantity
+            self.unit_price
+            * self.quantity
         )
 
-        super().save(*args, **kwargs)
+        super().save(
+            *args,
+            **kwargs,
+        )
 
 
 # =========================================================
@@ -513,6 +882,7 @@ class OrderItem(models.Model):
 # =========================================================
 
 class Payment(models.Model):
+
     STATUS_CHOICES = (
         ("created", "Created"),
         ("pending", "Pending"),
@@ -578,6 +948,10 @@ class Payment(models.Model):
         blank=True,
     )
 
+    # =====================================================
+    # Payment Failure Details
+    # =====================================================
+
     failure_code = models.CharField(
         max_length=100,
         blank=True,
@@ -602,10 +976,18 @@ class Payment(models.Model):
         blank=True,
     )
 
+    # =====================================================
+    # Raw Gateway Response
+    # =====================================================
+
     gateway_response = models.JSONField(
         default=dict,
         blank=True,
     )
+
+    # =====================================================
+    # Timeline
+    # =====================================================
 
     paid_at = models.DateTimeField(
         null=True,
@@ -621,11 +1003,20 @@ class Payment(models.Model):
     )
 
     class Meta:
-        ordering = ("-created_at",)
+        ordering = (
+            "-created_at",
+        )
+
         verbose_name = "Payment"
         verbose_name_plural = "Payments"
+
         indexes = [
-            models.Index(fields=["status", "created_at"]),
+            models.Index(
+                fields=[
+                    "status",
+                    "created_at",
+                ]
+            ),
         ]
 
     def __str__(self):
@@ -636,10 +1027,14 @@ class Payment(models.Model):
 
     @property
     def is_successful(self):
-        return self.status =="captured"
-        
+        return (
+            self.status
+            == "captured"
+        )
 
     @property
     def is_refunded(self):
-        return self.status == "refunded"
-
+        return (
+            self.status
+            == "refunded"
+        )

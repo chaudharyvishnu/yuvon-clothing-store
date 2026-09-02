@@ -3353,3 +3353,387 @@ class AdminDashboardSummaryView(APIView):
 AdminOrderDashboardView = (
     AdminDashboardSummaryView
 )
+
+
+
+# =========================================================
+# Customer Shipment Tracking
+# =========================================================
+
+class MyOrderTrackingView(APIView):
+    """GET /api/orders/my-orders/<order_number>/tracking/"""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, order_number):
+        order = get_object_or_404(
+            Order.objects
+            .filter(user=request.user, order_number=order_number)
+            .select_related("user", "shipping_address", "payment")
+            .prefetch_related("items", "items__product", "items__variant")
+        )
+
+        return Response(
+            {
+                "order_number": order.order_number,
+                "order_status": order.status,
+                "shipping_status": getattr(order, "shipping_status", ""),
+                "shipping_status_code": getattr(order, "shipping_status_code", ""),
+                "courier_name": getattr(order, "courier_name", ""),
+                "courier_service": getattr(order, "courier_service", ""),
+                "courier_company_id": getattr(order, "courier_company_id", ""),
+                "tracking_id": getattr(order, "tracking_id", ""),
+                "awb_code": getattr(order, "awb_code", ""),
+                "shipment_id": getattr(order, "shipment_id", ""),
+                "shipping_order_id": getattr(order, "shipping_order_id", ""),
+                "shiprocket_order_id": getattr(order, "shiprocket_order_id", ""),
+                "shiprocket_shipment_id": getattr(order, "shiprocket_shipment_id", ""),
+                "tracking_url": getattr(order, "tracking_url", ""),
+                "estimated_delivery": getattr(order, "estimated_delivery", None),
+                "pickup_scheduled": getattr(order, "pickup_scheduled", False),
+                "pickup_scheduled_at": getattr(order, "pickup_scheduled_at", None),
+                "placed_at": getattr(order, "placed_at", None),
+                "shipment_created_at": getattr(order, "shipment_created_at", None),
+                "awb_assigned_at": getattr(order, "awb_assigned_at", None),
+                "shipped_at": getattr(order, "shipped_at", None),
+                "in_transit_at": getattr(order, "in_transit_at", None),
+                "out_for_delivery_at": getattr(order, "out_for_delivery_at", None),
+                "delivered_at": getattr(order, "delivered_at", None),
+                "can_track": bool(getattr(order, "can_track", False)),
+                "tracking_response": getattr(order, "tracking_response", {}),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+# =========================================================
+# Admin Shipping Detail
+# =========================================================
+
+class AdminOrderShippingView(APIView):
+    """GET /api/orders/admin/orders/<order_number>/shipping/"""
+
+    permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request, order_number):
+        order = get_object_or_404(
+            Order.objects
+            .select_related("user", "shipping_address", "payment")
+            .prefetch_related("items", "items__product", "items__variant"),
+            order_number=order_number,
+        )
+
+        return Response(
+            {
+                "order_number": order.order_number,
+                "order_status": order.status,
+                "payment_method": order.payment_method,
+                "payment_status": order.payment_status,
+                "courier_name": getattr(order, "courier_name", ""),
+                "courier_service": getattr(order, "courier_service", ""),
+                "courier_company_id": getattr(order, "courier_company_id", ""),
+                "tracking_id": getattr(order, "tracking_id", ""),
+                "awb_code": getattr(order, "awb_code", ""),
+                "shipment_id": getattr(order, "shipment_id", ""),
+                "shipping_order_id": getattr(order, "shipping_order_id", ""),
+                "shiprocket_order_id": getattr(order, "shiprocket_order_id", ""),
+                "shiprocket_shipment_id": getattr(order, "shiprocket_shipment_id", ""),
+                "shipping_status": getattr(order, "shipping_status", ""),
+                "shipping_status_code": getattr(order, "shipping_status_code", ""),
+                "tracking_url": getattr(order, "tracking_url", ""),
+                "shipping_label_url": getattr(order, "shipping_label_url", ""),
+                "manifest_url": getattr(order, "manifest_url", ""),
+                "pickup_token": getattr(order, "pickup_token", ""),
+                "pickup_scheduled": getattr(order, "pickup_scheduled", False),
+                "pickup_scheduled_at": getattr(order, "pickup_scheduled_at", None),
+                "estimated_delivery": getattr(order, "estimated_delivery", None),
+                "package_weight": getattr(order, "package_weight", None),
+                "package_length": getattr(order, "package_length", None),
+                "package_breadth": getattr(order, "package_breadth", None),
+                "package_height": getattr(order, "package_height", None),
+                "shipment_created_at": getattr(order, "shipment_created_at", None),
+                "awb_assigned_at": getattr(order, "awb_assigned_at", None),
+                "placed_at": getattr(order, "placed_at", None),
+                "shipped_at": getattr(order, "shipped_at", None),
+                "in_transit_at": getattr(order, "in_transit_at", None),
+                "out_for_delivery_at": getattr(order, "out_for_delivery_at", None),
+                "delivered_at": getattr(order, "delivered_at", None),
+                "has_shipment": bool(getattr(order, "has_shipment", False)),
+                "has_awb": bool(getattr(order, "has_awb", False)),
+                "can_track": bool(getattr(order, "can_track", False)),
+                "serviceability_response": getattr(order, "serviceability_response", {}),
+                "shipping_response": getattr(order, "shipping_response", {}),
+                "awb_response": getattr(order, "awb_response", {}),
+                "pickup_response": getattr(order, "pickup_response", {}),
+                "tracking_response": getattr(order, "tracking_response", {}),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+# =========================================================
+# Shiprocket Admin API Integration
+# =========================================================
+
+from .shiprocket import (
+    ShiprocketError,
+    assign_order_awb,
+    check_order_serviceability,
+    create_shiprocket_order,
+    get_shiprocket_client,
+    schedule_order_pickup,
+    track_order_shipment,
+)
+
+
+def _get_admin_shiprocket_order(order_number, lock=False):
+    queryset = (
+        Order.objects
+        .select_related("user", "shipping_address", "payment")
+        .prefetch_related("items", "items__product", "items__variant")
+    )
+    if lock:
+        queryset = queryset.select_for_update()
+    return get_object_or_404(queryset, order_number=order_number)
+
+
+def _shiprocket_error_response(error):
+    return Response(
+        {"detail": str(error)},
+        status=status.HTTP_502_BAD_GATEWAY,
+    )
+
+
+def _find_shiprocket_url(data, *keys):
+    if isinstance(data, dict):
+        for key in keys:
+            value = data.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        for value in data.values():
+            found = _find_shiprocket_url(value, *keys)
+            if found:
+                return found
+    elif isinstance(data, list):
+        for value in data:
+            found = _find_shiprocket_url(value, *keys)
+            if found:
+                return found
+    return ""
+
+
+class AdminShiprocketServiceabilityView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    def post(self, request, order_number):
+        order = _get_admin_shiprocket_order(order_number)
+        pickup_postcode = str(
+            request.data.get("pickup_postcode")
+            or getattr(settings, "SHIPROCKET_PICKUP_POSTCODE", "")
+            or ""
+        ).strip()
+        if not pickup_postcode:
+            return Response(
+                {"pickup_postcode": "Configure SHIPROCKET_PICKUP_POSTCODE or send pickup_postcode."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            response = check_order_serviceability(order, pickup_postcode=pickup_postcode)
+        except ShiprocketError as error:
+            return _shiprocket_error_response(error)
+        couriers = []
+        if isinstance(response, dict) and isinstance(response.get("data"), dict):
+            couriers = response["data"].get("available_courier_companies") or []
+        return Response({
+            "message": "Courier serviceability checked successfully.",
+            "order_number": order.order_number,
+            "pickup_postcode": pickup_postcode,
+            "delivery_postcode": order.postal_code,
+            "couriers_found": len(couriers),
+            "couriers": couriers,
+            "response": response,
+        })
+
+
+class AdminShiprocketCreateOrderView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    @transaction.atomic
+    def post(self, request, order_number):
+        order = _get_admin_shiprocket_order(order_number, lock=True)
+        if order.status == "cancelled":
+            return Response({"detail": "A cancelled order cannot be sent to Shiprocket."}, status=status.HTTP_400_BAD_REQUEST)
+        existing = getattr(order, "shiprocket_shipment_id", "") or getattr(order, "shipment_id", "")
+        if existing:
+            return Response({
+                "message": "Shiprocket shipment already exists.",
+                "order_number": order.order_number,
+                "shiprocket_order_id": getattr(order, "shiprocket_order_id", ""),
+                "shiprocket_shipment_id": existing,
+            })
+        try:
+            response = create_shiprocket_order(order)
+        except ShiprocketError as error:
+            return _shiprocket_error_response(error)
+        order.refresh_from_db()
+        return Response({
+            "message": "Shiprocket order created successfully.",
+            "order_number": order.order_number,
+            "shiprocket_order_id": getattr(order, "shiprocket_order_id", ""),
+            "shiprocket_shipment_id": getattr(order, "shiprocket_shipment_id", ""),
+            "shipping_status": getattr(order, "shipping_status", ""),
+            "response": response,
+        }, status=status.HTTP_201_CREATED)
+
+
+class AdminShiprocketAssignAWBView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    @transaction.atomic
+    def post(self, request, order_number):
+        order = _get_admin_shiprocket_order(order_number, lock=True)
+        if getattr(order, "awb_code", ""):
+            return Response({
+                "message": "AWB is already assigned.",
+                "order_number": order.order_number,
+                "awb_code": order.awb_code,
+                "tracking_id": getattr(order, "tracking_id", ""),
+                "courier_name": getattr(order, "courier_name", ""),
+                "courier_company_id": getattr(order, "courier_company_id", ""),
+            })
+        courier_id = request.data.get("courier_id")
+        if courier_id not in (None, ""):
+            try:
+                courier_id = int(courier_id)
+            except (TypeError, ValueError):
+                return Response({"courier_id": "courier_id must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            courier_id = None
+        try:
+            response = assign_order_awb(order, courier_id=courier_id)
+        except ShiprocketError as error:
+            return _shiprocket_error_response(error)
+        order.refresh_from_db()
+        return Response({
+            "message": "Shiprocket AWB assigned successfully.",
+            "order_number": order.order_number,
+            "awb_code": getattr(order, "awb_code", ""),
+            "tracking_id": getattr(order, "tracking_id", ""),
+            "courier_name": getattr(order, "courier_name", ""),
+            "courier_company_id": getattr(order, "courier_company_id", ""),
+            "response": response,
+        })
+
+
+class AdminShiprocketPickupView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    @transaction.atomic
+    def post(self, request, order_number):
+        order = _get_admin_shiprocket_order(order_number, lock=True)
+        if getattr(order, "pickup_scheduled", False):
+            return Response({
+                "message": "Pickup is already scheduled.",
+                "order_number": order.order_number,
+                "pickup_scheduled": True,
+                "pickup_scheduled_at": getattr(order, "pickup_scheduled_at", None),
+            })
+        if not (getattr(order, "awb_code", "") or getattr(order, "tracking_id", "")):
+            return Response({"detail": "Assign AWB before scheduling pickup."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            response = schedule_order_pickup(order)
+        except ShiprocketError as error:
+            return _shiprocket_error_response(error)
+        order.refresh_from_db()
+        return Response({
+            "message": "Shiprocket pickup scheduled successfully.",
+            "order_number": order.order_number,
+            "pickup_scheduled": getattr(order, "pickup_scheduled", False),
+            "pickup_scheduled_at": getattr(order, "pickup_scheduled_at", None),
+            "response": response,
+        })
+
+
+class AdminShiprocketLabelView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    @transaction.atomic
+    def post(self, request, order_number):
+        order = _get_admin_shiprocket_order(order_number, lock=True)
+        shipment_id = getattr(order, "shiprocket_shipment_id", "") or getattr(order, "shipment_id", "")
+        if not shipment_id:
+            return Response({"detail": "Create the Shiprocket shipment first."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            client = get_shiprocket_client()
+            response = client.generate_label(shipment_id=shipment_id)
+        except ShiprocketError as error:
+            return _shiprocket_error_response(error)
+        label_url = _find_shiprocket_url(response, "label_url", "label_created", "label")
+        if label_url:
+            order.shipping_label_url = label_url
+            order.save(update_fields=["shipping_label_url", "updated_at"])
+        return Response({
+            "message": "Shiprocket label generated successfully.",
+            "order_number": order.order_number,
+            "shipping_label_url": getattr(order, "shipping_label_url", ""),
+            "response": response,
+        })
+
+
+class AdminShiprocketManifestView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    @transaction.atomic
+    def post(self, request, order_number):
+        order = _get_admin_shiprocket_order(order_number, lock=True)
+        shipment_id = getattr(order, "shiprocket_shipment_id", "") or getattr(order, "shipment_id", "")
+        if not shipment_id:
+            return Response({"detail": "Create the Shiprocket shipment first."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            client = get_shiprocket_client()
+            response = client.generate_manifest(shipment_id=shipment_id)
+        except ShiprocketError as error:
+            return _shiprocket_error_response(error)
+        manifest_url = _find_shiprocket_url(response, "manifest_url", "manifest")
+        if manifest_url:
+            order.manifest_url = manifest_url
+            order.save(update_fields=["manifest_url", "updated_at"])
+        return Response({
+            "message": "Shiprocket manifest generated successfully.",
+            "order_number": order.order_number,
+            "manifest_url": getattr(order, "manifest_url", ""),
+            "response": response,
+        })
+
+
+class AdminShiprocketTrackingView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request, order_number):
+        order = _get_admin_shiprocket_order(order_number)
+        if not (getattr(order, "awb_code", "") or getattr(order, "tracking_id", "")):
+            return Response({"detail": "AWB/tracking ID is not available for this order."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            response = track_order_shipment(order)
+        except ShiprocketError as error:
+            return _shiprocket_error_response(error)
+        order.refresh_from_db()
+        if order.payment_method == "cod" and order.status == "delivered" and order.payment_status != "paid":
+            with transaction.atomic():
+                locked_order = Order.objects.select_for_update().get(pk=order.pk)
+                sync_cod_payment_after_delivery(locked_order)
+            order.refresh_from_db()
+        return Response({
+            "message": "Shiprocket tracking refreshed successfully.",
+            "order_number": order.order_number,
+            "order_status": order.status,
+            "shipping_status": getattr(order, "shipping_status", ""),
+            "shipping_status_code": getattr(order, "shipping_status_code", ""),
+            "awb_code": getattr(order, "awb_code", ""),
+            "tracking_id": getattr(order, "tracking_id", ""),
+            "courier_name": getattr(order, "courier_name", ""),
+            "tracking_url": getattr(order, "tracking_url", ""),
+            "estimated_delivery": getattr(order, "estimated_delivery", None),
+            "tracking_response": getattr(order, "tracking_response", {}),
+            "response": response,
+        })

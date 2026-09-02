@@ -8,27 +8,245 @@ import {
 } from "../../context/AuthContext";
 
 
+/* =========================================================
+   Boolean Normalizer
+========================================================= */
+
+function normalizeBoolean(
+  value
+) {
+  if (
+    value === true ||
+    value === 1
+  ) {
+    return true;
+  }
+
+
+  if (
+    value === false ||
+    value === 0 ||
+    value === null ||
+    value === undefined
+  ) {
+    return false;
+  }
+
+
+  const normalizedValue =
+    String(
+      value
+    )
+      .trim()
+      .toLowerCase();
+
+
+  return [
+    "true",
+    "1",
+    "yes",
+    "y",
+  ].includes(
+    normalizedValue
+  );
+}
+
+
+/* =========================================================
+   Role Normalizer
+========================================================= */
+
+function normalizeRole(
+  value
+) {
+  return String(
+    value ||
+    ""
+  )
+    .trim()
+    .toLowerCase();
+}
+
+
+/* =========================================================
+   Admin Access Helper
+========================================================= */
+
+function userHasAdminAccess(
+  user,
+  contextIsAdmin
+) {
+  /*
+   * AuthContext may already calculate isAdmin.
+   *
+   * If it does, we respect that first.
+   */
+
+  if (
+    contextIsAdmin === true
+  ) {
+    return true;
+  }
+
+
+  if (
+    !user ||
+    typeof user !==
+      "object"
+  ) {
+    return false;
+  }
+
+
+  /*
+   * Django / backend permission flags.
+   *
+   * Backend may return booleans:
+   *
+   * is_staff: true
+   * is_superuser: true
+   * is_admin: true
+   *
+   * Some APIs may serialize them as:
+   *
+   * "true"
+   * 1
+   */
+
+  const isSuperuser =
+    normalizeBoolean(
+      user.is_superuser
+    );
+
+
+  const isStaff =
+    normalizeBoolean(
+      user.is_staff
+    );
+
+
+  const isAdminFlag =
+    normalizeBoolean(
+      user.is_admin
+    );
+
+
+  /*
+   * Role may be returned directly.
+   */
+
+  const directRole =
+    normalizeRole(
+      user.role
+    );
+
+
+  /*
+   * Some serializers may return role inside
+   * another object.
+   */
+
+  const nestedRole =
+    normalizeRole(
+      user.role?.name ||
+      user.role?.slug ||
+      user.user_role ||
+      user.user_type
+    );
+
+
+  const adminRoles =
+    new Set([
+      "admin",
+      "administrator",
+      "superadmin",
+      "super_admin",
+      "superuser",
+      "staff",
+    ]);
+
+
+  const hasAdminRole =
+    adminRoles.has(
+      directRole
+    ) ||
+    adminRoles.has(
+      nestedRole
+    );
+
+
+  return Boolean(
+    isSuperuser ||
+    isStaff ||
+    isAdminFlag ||
+    hasAdminRole
+  );
+}
+
+
+/* =========================================================
+   Admin Route
+========================================================= */
+
 function AdminRoute({
   children,
 }) {
   const location =
     useLocation();
 
-  const {
-    user,
-    isAuthenticated,
-    isAdmin,
-    loading,
-  } = useAuth();
+
+  const auth =
+    useAuth();
 
 
-  // ======================================
-  // Loading
-  // ======================================
+  const user =
+    auth?.user ||
+    null;
 
-  if (loading) {
+
+  const isAuthenticated =
+    Boolean(
+      auth?.isAuthenticated
+    );
+
+
+  const isAdmin =
+    Boolean(
+      auth?.isAdmin
+    );
+
+
+  const loading =
+    Boolean(
+      auth?.loading
+    );
+
+
+  /* =======================================================
+     Current Route
+  ======================================================= */
+
+  const currentRoute =
+    `${location.pathname}${location.search}${location.hash}`;
+
+
+  /* =======================================================
+     Authentication Loading
+  ======================================================= */
+
+  if (
+    loading
+  ) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center px-6">
+      <div
+        className="
+          flex
+          min-h-[60vh]
+          items-center
+          justify-center
+          px-6
+        "
+      >
         <div className="text-center">
 
           <div
@@ -44,6 +262,7 @@ function AdminRoute({
             "
           />
 
+
           <p className="mt-4 text-sm font-medium text-gray-500">
             Checking admin access...
           </p>
@@ -54,62 +273,50 @@ function AdminRoute({
   }
 
 
-  // ======================================
-  // Authentication Check
-  // ======================================
+  /* =======================================================
+     Authentication Check
+  ======================================================= */
 
-  if (!isAuthenticated) {
+  if (
+    !isAuthenticated
+  ) {
     return (
       <Navigate
         to="/"
         replace
         state={{
           from:
-            `${location.pathname}${location.search}`,
+            currentRoute,
+
+          requiresAuthentication:
+            true,
+
+          requiresAdmin:
+            true,
         }}
       />
     );
   }
 
 
-  // ======================================
-  // Admin Permission Check
-  // ======================================
-  //
-  // Backend may return:
-  //
-  // role: "customer"
-  // is_staff: true
-  // is_superuser: true
-  //
-  // Therefore Django staff/superuser must also
-  // be considered an admin.
-  // ======================================
-
-  const normalizedRole =
-    String(
-      user?.role || ""
-    )
-      .trim()
-      .toLowerCase();
-
+  /* =======================================================
+     Admin Permission Check
+  ======================================================= */
 
   const hasAdminAccess =
-    Boolean(
-      isAdmin ||
-      user?.is_superuser === true ||
-      user?.is_staff === true ||
-      user?.is_admin === true ||
-      normalizedRole === "admin" ||
-      normalizedRole === "administrator"
+    userHasAdminAccess(
+      user,
+      isAdmin
     );
 
 
-  // ======================================
-  // Not Admin
-  // ======================================
+  /* =======================================================
+     Authenticated But Not Admin
+  ======================================================= */
 
-  if (!hasAdminAccess) {
+  if (
+    !hasAdminAccess
+  ) {
     return (
       <Navigate
         to="/"
@@ -119,16 +326,16 @@ function AdminRoute({
             true,
 
           from:
-            `${location.pathname}${location.search}`,
+            currentRoute,
         }}
       />
     );
   }
 
 
-  // ======================================
-  // Admin Allowed
-  // ======================================
+  /* =======================================================
+     Admin Access Granted
+  ======================================================= */
 
   return children;
 }

@@ -284,15 +284,6 @@ if CLOUDINARY_API_SECRET:
 # =========================================================
 # Applications
 # =========================================================
-#
-# IMPORTANT:
-#
-# Cloudinary is used only for uploaded MEDIA.
-#
-# django.contrib.staticfiles stays before cloudinary_storage
-# so Django's normal collectstatic command remains active.
-#
-# =========================================================
 
 INSTALLED_APPS = [
 
@@ -310,7 +301,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
 
-    # Cloudinary - media only
+    # Cloudinary
     "cloudinary_storage",
     "cloudinary",
 
@@ -579,34 +570,13 @@ USE_TZ = True
 # Static Files
 # =========================================================
 
-STATIC_URL = (
-    "/static/"
-)
-
+STATIC_URL = "/static/"
 
 STATIC_ROOT = (
     BASE_DIR /
     "staticfiles"
 )
 
-
-# =========================================================
-# Legacy Static Compatibility
-# =========================================================
-#
-# django-cloudinary-storage 0.3.0 checks the old
-# STATICFILES_STORAGE setting from its management command.
-#
-# We keep this compatibility setting, but DO NOT use
-# Cloudinary or WhiteNoise manifest storage for static
-# collection.
-#
-# Django Admin / DRF static files use normal
-# StaticFilesStorage.
-#
-# WhiteNoise middleware can still serve STATIC_ROOT.
-#
-# =========================================================
 
 STATICFILES_STORAGE = (
     "django.contrib.staticfiles.storage."
@@ -618,10 +588,7 @@ STATICFILES_STORAGE = (
 # Media Files
 # =========================================================
 
-MEDIA_URL = (
-    "/media/"
-)
-
+MEDIA_URL = "/media/"
 
 MEDIA_ROOT = (
     BASE_DIR /
@@ -631,34 +598,6 @@ MEDIA_ROOT = (
 
 # =========================================================
 # Storage Backends
-# =========================================================
-#
-# IMPORTANT:
-#
-# default:
-#     Uploaded product/media files.
-#
-#     USE_CLOUDINARY=True
-#         -> Cloudinary
-#
-#     USE_CLOUDINARY=False
-#         -> Local filesystem
-#
-# staticfiles:
-#     Django Admin / DRF / application static files.
-#
-#     We intentionally use StaticFilesStorage instead of
-#     CompressedManifestStaticFilesStorage.
-#
-#     This avoids WhiteNoise post-processing failures such
-#     as:
-#
-#     MissingFileError:
-#     admin/img/sorting-icons.svg
-#
-# WhiteNoise middleware remains enabled in production and
-# serves the collected STATIC_ROOT files.
-#
 # =========================================================
 
 if USE_CLOUDINARY:
@@ -704,18 +643,6 @@ else:
         },
     }
 
-
-# =========================================================
-# WhiteNoise Configuration
-# =========================================================
-#
-# Manifest strict mode is not required because we are no
-# longer using WhiteNoise ManifestStaticFilesStorage.
-#
-# WhiteNoise is being used as middleware to serve the files
-# collected into STATIC_ROOT.
-#
-# =========================================================
 
 WHITENOISE_MANIFEST_STRICT = False
 
@@ -772,21 +699,13 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = [
 
     "accept",
-
     "accept-encoding",
-
     "authorization",
-
     "content-type",
-
     "dnt",
-
     "origin",
-
     "user-agent",
-
     "x-csrftoken",
-
     "x-requested-with",
 ]
 
@@ -1226,6 +1145,115 @@ RAZORPAY_KEY_SECRET = os.getenv(
 
 
 # =========================================================
+# Shiprocket
+# =========================================================
+#
+# These credentials belong to the Shiprocket API User,
+# NOT necessarily the normal dashboard login.
+#
+# Local:
+# backend/.env
+#
+# Production:
+# Railway -> Service -> Variables
+#
+# Required variables:
+#
+# SHIPROCKET_EMAIL=...
+# SHIPROCKET_PASSWORD=...
+#
+# =========================================================
+
+SHIPROCKET_EMAIL = os.getenv(
+    "SHIPROCKET_EMAIL",
+    "",
+).strip()
+
+
+SHIPROCKET_PASSWORD = os.getenv(
+    "SHIPROCKET_PASSWORD",
+    "",
+).strip()
+
+
+SHIPROCKET_BASE_URL = os.getenv(
+    "SHIPROCKET_BASE_URL",
+    "https://apiv2.shiprocket.in/v1/external",
+).strip().rstrip("/")
+
+
+SHIPROCKET_TIMEOUT = env_int(
+    "SHIPROCKET_TIMEOUT",
+    30,
+)
+
+
+SHIPROCKET_CONFIGURED = bool(
+    SHIPROCKET_EMAIL
+    and SHIPROCKET_PASSWORD
+)
+
+
+# ---------------------------------------------------------
+# Pickup configuration
+# ---------------------------------------------------------
+#
+# After adding/verifying the pickup address in Shiprocket,
+# put the exact Shiprocket pickup location nickname/code
+# in this variable.
+#
+# Example:
+# SHIPROCKET_PICKUP_LOCATION=Primary
+#
+# ---------------------------------------------------------
+
+SHIPROCKET_PICKUP_LOCATION = os.getenv(
+    "SHIPROCKET_PICKUP_LOCATION",
+    "",
+).strip()
+
+
+# ---------------------------------------------------------
+# Optional shipment defaults
+# ---------------------------------------------------------
+
+SHIPROCKET_LENGTH = os.getenv(
+    "SHIPROCKET_LENGTH",
+    "10",
+).strip()
+
+
+SHIPROCKET_BREADTH = os.getenv(
+    "SHIPROCKET_BREADTH",
+    "10",
+).strip()
+
+
+SHIPROCKET_HEIGHT = os.getenv(
+    "SHIPROCKET_HEIGHT",
+    "5",
+).strip()
+
+
+SHIPROCKET_WEIGHT = os.getenv(
+    "SHIPROCKET_WEIGHT",
+    "0.5",
+).strip()
+
+
+SHIPROCKET_CHANNEL_ID = os.getenv(
+    "SHIPROCKET_CHANNEL_ID",
+    "",
+).strip()
+
+
+SHIPROCKET_AUTO_CREATE_SHIPMENT = env_bool(
+    "SHIPROCKET_AUTO_CREATE_SHIPMENT",
+    default=False,
+)
+
+
+# =========================================================
 # Logging
 # =========================================================
 
@@ -1549,7 +1577,36 @@ if DEBUG:
         "RAZORPAY KEY CONFIGURED:",
         bool(
             RAZORPAY_KEY_ID
+            and RAZORPAY_KEY_SECRET
         ),
+    )
+
+
+    print(
+        "SHIPROCKET CONFIGURED:",
+        SHIPROCKET_CONFIGURED,
+    )
+
+
+    print(
+        "SHIPROCKET BASE URL:",
+        SHIPROCKET_BASE_URL,
+    )
+
+
+    print(
+        "SHIPROCKET PICKUP LOCATION:",
+        (
+            SHIPROCKET_PICKUP_LOCATION
+            if SHIPROCKET_PICKUP_LOCATION
+            else "Not configured"
+        ),
+    )
+
+
+    print(
+        "SHIPROCKET AUTO CREATE SHIPMENT:",
+        SHIPROCKET_AUTO_CREATE_SHIPMENT,
     )
 
 

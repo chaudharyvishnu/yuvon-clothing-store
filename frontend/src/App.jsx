@@ -4,8 +4,18 @@ import {
   Link,
 } from "react-router-dom";
 
+
+// =========================================================
+// Global Layout
+// =========================================================
+
 import Navbar from "./components/layout/Navbar";
 import Footer from "./components/layout/Footer";
+
+
+// =========================================================
+// Home Components
+// =========================================================
 
 import Hero from "./components/home/Hero";
 import HomeNewArrivals from "./components/home/HomeNewArrivals";
@@ -17,8 +27,18 @@ import ClearanceProducts from "./components/home/ClearanceProducts";
 import MediaShowcase from "./components/home/MediaShowcase";
 import Testimonials from "./components/home/Testimonials";
 
+
+// =========================================================
+// Authentication / Route Protection
+// =========================================================
+
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import AdminRoute from "./components/auth/AdminRoute";
+
+
+// =========================================================
+// Public / Customer Pages
+// =========================================================
 
 import Shop from "./pages/shop";
 import ProductDetails from "./pages/productdetails";
@@ -40,14 +60,34 @@ import MyReviews from "./pages/MyReviews";
 import SavedAddresses from "./pages/SavedAddresses";
 import Checkout from "./pages/Checkout";
 
+
+// =========================================================
+// Admin Dashboard
+// =========================================================
+
 import Dashboard from "./pages/admin/Dashboard";
+
+
+// =========================================================
+// Admin Orders
+// =========================================================
 
 import AdminOrders from "./components/admin/AdminOrders";
 import AdminOrderDetails from "./components/admin/AdminOrderDetails";
 
+
+// =========================================================
+// Admin Products
+// =========================================================
+
 import AdminProducts from "./components/admin/AdminProducts";
 import AdminProductForm from "./components/admin/AdminProductForm";
 import AdminBulkUpload from "./components/admin/AdminBulkUpload";
+
+
+// =========================================================
+// Context Providers
+// =========================================================
 
 import {
   CartProvider,
@@ -61,9 +101,18 @@ import {
   WishlistProvider,
 } from "./context/WishlistContext";
 
+
+// =========================================================
+// Global Drawers
+// =========================================================
+
 import CartDrawer from "./components/cart/CartDrawer";
 import LoginDrawer from "./components/auth/LoginDrawer";
 
+
+// =========================================================
+// App
+// =========================================================
 
 function App() {
   return (
@@ -270,8 +319,8 @@ function App() {
                 Admin Bulk Product Upload
 
                 IMPORTANT:
-                Keep this route ABOVE /admin/products/:id
-                so "bulk-upload" is not treated as an ID.
+                Fixed route must stay BEFORE
+                /admin/products/:id
             ========================================== */}
 
             <Route
@@ -286,6 +335,10 @@ function App() {
 
             {/* ==========================================
                 Admin Add Product
+
+                IMPORTANT:
+                Fixed route must stay BEFORE
+                /admin/products/:id
             ========================================== */}
 
             <Route
@@ -301,7 +354,7 @@ function App() {
             {/* ==========================================
                 Admin Edit Product
 
-                Keep dynamic :id route AFTER fixed routes.
+                Dynamic route stays AFTER fixed routes.
             ========================================== */}
 
             <Route
@@ -371,7 +424,7 @@ function App() {
 
 
             {/* ==========================================
-                Support
+                Support / Tracking
             ========================================== */}
 
             <Route

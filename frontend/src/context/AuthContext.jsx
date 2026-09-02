@@ -34,6 +34,122 @@ const USER_DATA =
 
 
 /* =========================================================
+   Boolean Helper
+========================================================= */
+
+function normalizeBoolean(
+  value
+) {
+  if (
+    value === true ||
+    value === 1
+  ) {
+    return true;
+  }
+
+
+  if (
+    value === false ||
+    value === 0 ||
+    value === null ||
+    value === undefined
+  ) {
+    return false;
+  }
+
+
+  const normalizedValue =
+    String(
+      value
+    )
+      .trim()
+      .toLowerCase();
+
+
+  return [
+    "true",
+    "1",
+    "yes",
+    "y",
+  ].includes(
+    normalizedValue
+  );
+}
+
+
+/* =========================================================
+   Role Helper
+========================================================= */
+
+function normalizeRole(
+  value
+) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return "";
+  }
+
+
+  /*
+   * Normal string role:
+   *
+   * "admin"
+   * "customer"
+   * "staff"
+   */
+
+  if (
+    typeof value ===
+    "string"
+  ) {
+    return value
+      .trim()
+      .toLowerCase();
+  }
+
+
+  /*
+   * Compatibility:
+   *
+   * role may sometimes be:
+   *
+   * {
+   *   name: "Admin"
+   * }
+   *
+   * or:
+   *
+   * {
+   *   slug: "admin"
+   * }
+   */
+
+  if (
+    typeof value ===
+    "object"
+  ) {
+    return String(
+      value?.slug ||
+      value?.name ||
+      value?.code ||
+      ""
+    )
+      .trim()
+      .toLowerCase();
+  }
+
+
+  return String(
+    value
+  )
+    .trim()
+    .toLowerCase();
+}
+
+
+/* =========================================================
    Storage Helpers
 ========================================================= */
 
@@ -80,17 +196,31 @@ const storeAccessToken =
       return;
     }
 
+
+    const cleanToken =
+      String(
+        token
+      ).trim();
+
+
+    if (!cleanToken) {
+      return;
+    }
+
+
     localStorage.setItem(
       ACCESS_TOKEN,
-      token
+      cleanToken
     );
 
+
     /*
-     * Compatibility alias.
+     * Compatibility alias used by
+     * some existing frontend files.
      */
     localStorage.setItem(
       "access",
-      token
+      cleanToken
     );
   };
 
@@ -101,14 +231,30 @@ const storeRefreshToken =
       return;
     }
 
-    localStorage.setItem(
-      REFRESH_TOKEN,
-      token
-    );
+
+    const cleanToken =
+      String(
+        token
+      ).trim();
+
+
+    if (!cleanToken) {
+      return;
+    }
+
 
     localStorage.setItem(
+      REFRESH_TOKEN,
+      cleanToken
+    );
+
+
+    /*
+     * Compatibility alias.
+     */
+    localStorage.setItem(
       "refresh",
-      token
+      cleanToken
     );
   };
 
@@ -122,42 +268,117 @@ function normalizeUser(
 ) {
   if (
     !value ||
-    typeof value !== "object"
+    typeof value !==
+      "object" ||
+    Array.isArray(
+      value
+    )
   ) {
     return null;
   }
 
+
+  const role =
+    normalizeRole(
+      value?.role ||
+      value?.user_role ||
+      value?.user_type
+    );
+
+
   return {
     ...value,
 
+
+    /*
+     * Always normalize these permission
+     * values to actual booleans.
+     *
+     * This protects against backend values
+     * such as:
+     *
+     * true
+     * false
+     * 1
+     * 0
+     * "true"
+     * "false"
+     */
+
     is_staff:
-      Boolean(
+      normalizeBoolean(
         value?.is_staff ??
         value?.isStaff ??
         false
       ),
 
+
     is_superuser:
-      Boolean(
+      normalizeBoolean(
         value?.is_superuser ??
         value?.isSuperuser ??
         false
       ),
 
+
     is_admin:
-      Boolean(
+      normalizeBoolean(
         value?.is_admin ??
         value?.isAdmin ??
         false
       ),
 
-    role:
-      String(
-        value?.role || ""
-      )
-        .trim()
-        .toLowerCase(),
+
+    role,
   };
+}
+
+
+/* =========================================================
+   Admin Permission Helper
+========================================================= */
+
+function checkAdminAccess(
+  value
+) {
+  const normalizedUser =
+    normalizeUser(
+      value
+    );
+
+
+  if (
+    !normalizedUser
+  ) {
+    return false;
+  }
+
+
+  const role =
+    normalizeRole(
+      normalizedUser.role
+    );
+
+
+  const adminRoles =
+    new Set([
+      "admin",
+      "administrator",
+      "superadmin",
+      "super_admin",
+      "superuser",
+      "staff",
+    ]);
+
+
+  return Boolean(
+    normalizedUser.is_superuser ||
+    normalizedUser.is_staff ||
+    normalizedUser.is_admin ||
+    adminRoles.has(
+      role
+    )
+  );
 }
 
 
@@ -183,14 +404,22 @@ export function AuthProvider({
           USER_DATA
         );
 
-      if (!savedUser) {
+
+      if (
+        !savedUser
+      ) {
         return null;
       }
 
-      return normalizeUser(
+
+      const parsedUser =
         JSON.parse(
           savedUser
-        )
+        );
+
+
+      return normalizeUser(
+        parsedUser
       );
 
     } catch (error) {
@@ -199,9 +428,11 @@ export function AuthProvider({
         error
       );
 
+
       localStorage.removeItem(
         USER_DATA
       );
+
 
       return null;
     }
@@ -237,13 +468,17 @@ export function AuthProvider({
   const [
     loading,
     setLoading,
-  ] = useState(true);
+  ] = useState(
+    true
+  );
 
 
   const [
     isLoginOpen,
     setIsLoginOpen,
-  ] = useState(false);
+  ] = useState(
+    false
+  );
 
 
   /* =======================================================
@@ -261,9 +496,11 @@ export function AuthProvider({
             nextUser
           );
 
+
         setUserState(
           normalizedUser
         );
+
 
         if (
           normalizedUser
@@ -295,24 +532,51 @@ export function AuthProvider({
         refresh = "",
       } = {}) => {
 
-        if (access) {
-          storeAccessToken(
-            access
-          );
+        if (
+          access
+        ) {
+          const cleanAccess =
+            String(
+              access
+            ).trim();
 
-          setAccessToken(
-            access
-          );
+
+          if (
+            cleanAccess
+          ) {
+            storeAccessToken(
+              cleanAccess
+            );
+
+
+            setAccessToken(
+              cleanAccess
+            );
+          }
         }
 
-        if (refresh) {
-          storeRefreshToken(
-            refresh
-          );
 
-          setRefreshToken(
-            refresh
-          );
+        if (
+          refresh
+        ) {
+          const cleanRefresh =
+            String(
+              refresh
+            ).trim();
+
+
+          if (
+            cleanRefresh
+          ) {
+            storeRefreshToken(
+              cleanRefresh
+            );
+
+
+            setRefreshToken(
+              cleanRefresh
+            );
+          }
         }
       },
       []
@@ -357,9 +621,11 @@ export function AuthProvider({
           null
         );
 
+
         setAccessToken(
           ""
         );
+
 
         setRefreshToken(
           ""
@@ -428,6 +694,11 @@ export function AuthProvider({
       const loadProfile =
         async () => {
 
+          /*
+           * No access token means there is
+           * no authenticated session.
+           */
+
           if (
             !accessToken
           ) {
@@ -439,13 +710,22 @@ export function AuthProvider({
               );
             }
 
+
             return;
           }
 
 
+          /*
+           * We have a token.
+           *
+           * Always load the latest profile
+           * from backend instead of trusting
+           * old localStorage permissions.
+           */
+
           try {
 
-            const profile =
+            const profileResponse =
               await fetchProfile();
 
 
@@ -454,6 +734,23 @@ export function AuthProvider({
             ) {
               return;
             }
+
+
+            /*
+             * Compatibility with either:
+             *
+             * { ...user fields }
+             *
+             * or:
+             *
+             * {
+             *   user: { ... }
+             * }
+             */
+
+            const profile =
+              profileResponse?.user ||
+              profileResponse;
 
 
             saveUser(
@@ -471,13 +768,26 @@ export function AuthProvider({
 
 
             if (
-              isMounted &&
-              (
-                error?.status ===
-                  401 ||
-                error?.status ===
-                  403
-              )
+              !isMounted
+            ) {
+              return;
+            }
+
+
+            /*
+             * api.js already attempts token refresh
+             * automatically.
+             *
+             * Therefore if profile still returns
+             * 401/403 after api.js handling,
+             * session is no longer usable.
+             */
+
+            if (
+              error?.status ===
+                401 ||
+              error?.status ===
+                403
             ) {
               clearAuthentication();
             }
@@ -523,9 +833,36 @@ export function AuthProvider({
         password
       ) => {
 
+        const cleanUsername =
+          String(
+            username ||
+            ""
+          ).trim();
+
+
+        if (
+          !cleanUsername
+        ) {
+          throw new Error(
+            "Username is required."
+          );
+        }
+
+
+        if (
+          !password
+        ) {
+          throw new Error(
+            "Password is required."
+          );
+        }
+
+
         const data =
           await loginUser({
-            username,
+            username:
+              cleanUsername,
+
             password,
           });
 
@@ -533,12 +870,14 @@ export function AuthProvider({
         const access =
           data?.access ||
           data?.access_token ||
+          data?.tokens?.access ||
           "";
 
 
         const refresh =
           data?.refresh ||
           data?.refresh_token ||
+          data?.tokens?.refresh ||
           "";
 
 
@@ -551,6 +890,13 @@ export function AuthProvider({
         }
 
 
+        /*
+         * Save token before fetchProfile().
+         *
+         * services/api.js reads authentication
+         * token directly from localStorage.
+         */
+
         saveTokens({
           access,
           refresh,
@@ -559,37 +905,85 @@ export function AuthProvider({
 
         let loggedInUser =
           data?.user ||
+          data?.profile ||
           null;
 
 
         /*
-         * Login response user ko first use karenge.
+         * Login response may not contain all
+         * Django permission fields.
          *
-         * Agar backend login response me user nahi mila,
-         * then profile endpoint call hoga.
+         * Therefore profile endpoint is preferred
+         * whenever possible.
          */
-        if (
-          !loggedInUser
-        ) {
-          try {
 
-            loggedInUser =
-              await fetchProfile();
+        try {
 
-          } catch (
-            profileError
+          const profileResponse =
+            await fetchProfile();
+
+
+          const profile =
+            profileResponse?.user ||
+            profileResponse;
+
+
+          if (
+            profile &&
+            typeof profile ===
+              "object"
           ) {
+            loggedInUser =
+              profile;
+          }
 
-            console.error(
-              "Profile fetch after login failed:",
-              profileError
-            );
+        } catch (
+          profileError
+        ) {
+
+          console.error(
+            "Profile fetch after login failed:",
+            profileError
+          );
+
+
+          /*
+           * If login response already contained
+           * the user, we can continue.
+           *
+           * Otherwise authentication state would
+           * contain a token but no user.
+           */
+
+          if (
+            !loggedInUser
+          ) {
+            clearAuthentication();
+
+            throw profileError;
           }
         }
 
 
+        const normalizedUser =
+          normalizeUser(
+            loggedInUser
+          );
+
+
+        if (
+          !normalizedUser
+        ) {
+          clearAuthentication();
+
+          throw new Error(
+            "User profile login response me nahi mila."
+          );
+        }
+
+
         saveUser(
-          loggedInUser
+          normalizedUser
         );
 
 
@@ -600,18 +994,18 @@ export function AuthProvider({
           ...data,
 
           access,
+
           refresh,
 
           user:
-            normalizeUser(
-              loggedInUser
-            ),
+            normalizedUser,
         };
       },
       [
         saveTokens,
         saveUser,
         closeLogin,
+        clearAuthentication,
       ]
     );
 
@@ -635,12 +1029,14 @@ export function AuthProvider({
         const access =
           data?.access ||
           data?.access_token ||
+          data?.tokens?.access ||
           "";
 
 
         const refresh =
           data?.refresh ||
           data?.refresh_token ||
+          data?.tokens?.refresh ||
           "";
 
 
@@ -661,31 +1057,75 @@ export function AuthProvider({
 
         let registeredUser =
           data?.user ||
+          data?.profile ||
           null;
 
 
-        if (
-          !registeredUser
-        ) {
-          try {
+        /*
+         * Fetch fresh profile so that
+         * role / permission fields remain
+         * consistent with login.
+         */
 
-            registeredUser =
-              await fetchProfile();
+        try {
 
-          } catch (
-            profileError
+          const profileResponse =
+            await fetchProfile();
+
+
+          const profile =
+            profileResponse?.user ||
+            profileResponse;
+
+
+          if (
+            profile &&
+            typeof profile ===
+              "object"
           ) {
+            registeredUser =
+              profile;
+          }
 
-            console.error(
-              "Profile fetch after register failed:",
-              profileError
-            );
+        } catch (
+          profileError
+        ) {
+
+          console.error(
+            "Profile fetch after register failed:",
+            profileError
+          );
+
+
+          if (
+            !registeredUser
+          ) {
+            clearAuthentication();
+
+            throw profileError;
           }
         }
 
 
+        const normalizedUser =
+          normalizeUser(
+            registeredUser
+          );
+
+
+        if (
+          !normalizedUser
+        ) {
+          clearAuthentication();
+
+          throw new Error(
+            "User profile register response me nahi mila."
+          );
+        }
+
+
         saveUser(
-          registeredUser
+          normalizedUser
         );
 
 
@@ -696,18 +1136,18 @@ export function AuthProvider({
           ...data,
 
           access,
+
           refresh,
 
           user:
-            normalizeUser(
-              registeredUser
-            ),
+            normalizedUser,
         };
       },
       [
         saveTokens,
         saveUser,
         closeLogin,
+        clearAuthentication,
       ]
     );
 
@@ -733,6 +1173,11 @@ export function AuthProvider({
         } catch (
           error
         ) {
+
+          /*
+           * Even if backend logout fails,
+           * local session must still be removed.
+           */
 
           console.error(
             "Backend logout error:",
@@ -771,18 +1216,36 @@ export function AuthProvider({
 
         try {
 
-          const profile =
+          const profileResponse =
             await fetchProfile();
 
 
+          const profile =
+            profileResponse?.user ||
+            profileResponse;
+
+
+          const normalizedUser =
+            normalizeUser(
+              profile
+            );
+
+
+          if (
+            !normalizedUser
+          ) {
+            throw new Error(
+              "Valid user profile was not returned."
+            );
+          }
+
+
           saveUser(
-            profile
+            normalizedUser
           );
 
 
-          return normalizeUser(
-            profile
-          );
+          return normalizedUser;
 
         } catch (
           error
@@ -827,44 +1290,38 @@ export function AuthProvider({
 
 
   const normalizedRole =
-    String(
-      user?.role ||
-      ""
-    )
-      .trim()
-      .toLowerCase();
+    normalizeRole(
+      user?.role
+    );
 
 
   const isStaff =
-    Boolean(
-      user?.is_staff ===
-        true ||
-      user?.isStaff ===
-        true
+    normalizeBoolean(
+      user?.is_staff ??
+      user?.isStaff ??
+      false
     );
 
 
   const isSuperuser =
-    Boolean(
-      user?.is_superuser ===
-        true ||
-      user?.isSuperuser ===
-        true
+    normalizeBoolean(
+      user?.is_superuser ??
+      user?.isSuperuser ??
+      false
+    );
+
+
+  const hasAdminFlag =
+    normalizeBoolean(
+      user?.is_admin ??
+      user?.isAdmin ??
+      false
     );
 
 
   const isAdmin =
-    Boolean(
-      isSuperuser ||
-      isStaff ||
-      user?.is_admin ===
-        true ||
-      user?.isAdmin ===
-        true ||
-      normalizedRole ===
-        "admin" ||
-      normalizedRole ===
-        "administrator"
+    checkAdminAccess(
+      user
     );
 
 
@@ -875,7 +1332,10 @@ export function AuthProvider({
   const value =
     useMemo(
       () => ({
-        /* User */
+
+        /* -----------------------------------------------
+           User
+        ----------------------------------------------- */
 
         user,
 
@@ -887,24 +1347,32 @@ export function AuthProvider({
         refreshCurrentUser,
 
 
-        /* Loading */
+        /* -----------------------------------------------
+           Loading
+        ----------------------------------------------- */
 
         loading,
 
 
-        /* Tokens */
+        /* -----------------------------------------------
+           Tokens
+        ----------------------------------------------- */
 
         accessToken,
 
         refreshToken,
 
 
-        /* Authentication */
+        /* -----------------------------------------------
+           Authentication
+        ----------------------------------------------- */
 
         isAuthenticated,
 
 
-        /* Authorization */
+        /* -----------------------------------------------
+           Authorization
+        ----------------------------------------------- */
 
         isAdmin,
 
@@ -912,8 +1380,15 @@ export function AuthProvider({
 
         isSuperuser,
 
+        hasAdminFlag,
 
-        /* Authentication Actions */
+        role:
+          normalizedRole,
+
+
+        /* -----------------------------------------------
+           Authentication Actions
+        ----------------------------------------------- */
 
         login,
 
@@ -922,7 +1397,9 @@ export function AuthProvider({
         logout,
 
 
-        /* Login Drawer */
+        /* -----------------------------------------------
+           Login Drawer
+        ----------------------------------------------- */
 
         isLoginOpen,
 
@@ -953,6 +1430,10 @@ export function AuthProvider({
 
         isSuperuser,
 
+        hasAdminFlag,
+
+        normalizedRole,
+
         login,
 
         register,
@@ -967,6 +1448,10 @@ export function AuthProvider({
       ]
     );
 
+
+  /* =======================================================
+     Provider
+  ======================================================= */
 
   return (
     <AuthContext.Provider
