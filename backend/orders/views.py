@@ -36,7 +36,12 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from .models import Order, Payment, ShippingAddress
+from .models import (
+    Order,
+    Payment,
+    ReturnRequest,
+    ShippingAddress,
+)
 from .serializers import (
     AdminOrderDetailSerializer,
     AdminOrderListSerializer,
@@ -44,6 +49,8 @@ from .serializers import (
     AdminOrderUpdateSerializer,
     CheckoutSerializer,
     OrderSerializer,
+    ReturnRequestCreateSerializer,
+    ReturnRequestSerializer,
     ShippingAddressSerializer,
 )
 
@@ -3737,3 +3744,827 @@ class AdminShiprocketTrackingView(APIView):
             "tracking_response": getattr(order, "tracking_response", {}),
             "response": response,
         })
+# =========================================================
+# Return / Exchange - Customer
+# =========================================================
+
+class ReturnRequestCreateView(
+    generics.CreateAPIView
+):
+    """
+    POST /api/orders/returns/create/
+
+    Logged-in customer delivered order ke liye
+    return ya exchange request create kar sakta hai.
+    """
+
+    serializer_class = (
+        ReturnRequestCreateSerializer
+    )
+
+    permission_classes = [
+        permissions.IsAuthenticated,
+    ]
+
+    def create(
+        self,
+        request,
+        *args,
+        **kwargs,
+    ):
+        serializer = self.get_serializer(
+            data=request.data,
+            context={
+                "request":
+                    request,
+            },
+        )
+
+        serializer.is_valid(
+            raise_exception=True,
+        )
+
+        return_request = (
+            serializer.save()
+        )
+
+        response_serializer = (
+            ReturnRequestSerializer(
+                return_request,
+                context={
+                    "request":
+                        request,
+                },
+            )
+        )
+
+        return Response(
+            {
+                "message": (
+                    "Return / exchange request "
+                    "created successfully."
+                ),
+                "return_request":
+                    response_serializer.data,
+            },
+            status=(
+                status
+                .HTTP_201_CREATED
+            ),
+        )
+
+
+# =========================================================
+# Customer Return / Exchange List
+# =========================================================
+
+class MyReturnRequestListView(
+    generics.ListAPIView
+):
+    """
+    GET /api/orders/returns/
+
+    Logged-in customer ke apne
+    return/exchange requests.
+    """
+
+    serializer_class = (
+        ReturnRequestSerializer
+    )
+
+    permission_classes = [
+        permissions.IsAuthenticated,
+    ]
+
+    def get_queryset(self):
+        return (
+            ReturnRequest.objects
+            .filter(
+                user=self.request.user,
+            )
+            .select_related(
+                "order",
+                "user",
+                "processed_by",
+            )
+            .prefetch_related(
+                "items",
+                "items__order_item",
+                "items__order_item__product",
+                "items__order_item__variant",
+                "items__replacement_variant",
+            )
+            .order_by(
+                "-created_at"
+            )
+        )
+
+
+# =========================================================
+# Customer Return / Exchange Detail
+# =========================================================
+
+class MyReturnRequestDetailView(
+    generics.RetrieveAPIView
+):
+    """
+    GET /api/orders/returns/<return_number>/
+    """
+
+    serializer_class = (
+        ReturnRequestSerializer
+    )
+
+    permission_classes = [
+        permissions.IsAuthenticated,
+    ]
+
+    lookup_field = (
+        "return_number"
+    )
+
+    lookup_url_kwarg = (
+        "return_number"
+    )
+
+    def get_queryset(self):
+        return (
+            ReturnRequest.objects
+            .filter(
+                user=self.request.user,
+            )
+            .select_related(
+                "order",
+                "user",
+                "processed_by",
+            )
+            .prefetch_related(
+                "items",
+                "items__order_item",
+                "items__order_item__product",
+                "items__order_item__variant",
+                "items__replacement_variant",
+            )
+        )
+
+
+# =========================================================
+# Customer Cancel Return / Exchange Request
+# =========================================================
+
+class CancelReturnRequestView(
+    APIView
+):
+    """
+    POST /api/orders/returns/<return_number>/cancel/
+
+    Customer sirf initial requested state me
+    request cancel kar sakta hai.
+    """
+
+    permission_classes = [
+        permissions.IsAuthenticated,
+    ]
+
+    @transaction.atomic
+    def post(
+        self,
+        request,
+        return_number,
+    ):
+        return_request = (
+            get_object_or_404(
+                ReturnRequest.objects
+                .select_for_update()
+                .select_related(
+                    "order",
+                    "user",
+                ),
+                return_number=return_number,
+                user=request.user,
+            )
+        )
+
+        if (
+            return_request.status
+            != "requested"
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "This return / exchange "
+                        "request can no longer "
+                        "be cancelled."
+                    )
+                },
+                status=(
+                    status
+                    .HTTP_400_BAD_REQUEST
+                ),
+            )
+
+        return_request.status = (
+            "cancelled"
+        )
+
+        return_request.save(
+            update_fields=[
+                "status",
+                "updated_at",
+            ]
+        )
+
+        # -------------------------------------------------
+        # Restore order status to delivered
+        # -------------------------------------------------
+
+        order = (
+            Order.objects
+            .select_for_update()
+            .get(
+                pk=return_request.order_id,
+            )
+        )
+
+        if order.status in {
+            "return_requested",
+            "exchange_requested",
+        }:
+            order.status = (
+                "delivered"
+            )
+
+            order.save(
+                update_fields=[
+                    "status",
+                    "updated_at",
+                ]
+            )
+
+        response_serializer = (
+            ReturnRequestSerializer(
+                return_request,
+                context={
+                    "request":
+                        request,
+                },
+            )
+        )
+
+        return Response(
+            {
+                "message": (
+                    "Return / exchange request "
+                    "cancelled successfully."
+                ),
+                "return_request":
+                    response_serializer.data,
+            },
+            status=(
+                status
+                .HTTP_200_OK
+            ),
+        )
+
+
+# =========================================================
+# Admin Return / Exchange Pagination
+# =========================================================
+
+class AdminReturnRequestPagination(
+    PageNumberPagination
+):
+    page_size = 25
+
+    page_size_query_param = (
+        "page_size"
+    )
+
+    max_page_size = 100
+
+
+# =========================================================
+# Admin Return / Exchange List
+# =========================================================
+
+class AdminReturnRequestListView(
+    generics.ListAPIView
+):
+    """
+    GET /api/orders/admin/returns/
+
+    Supported query params:
+    - search
+    - status
+    - request_type
+    - reason
+    - page
+    - page_size
+    """
+
+    serializer_class = (
+        ReturnRequestSerializer
+    )
+
+    permission_classes = [
+        permissions.IsAdminUser,
+    ]
+
+    pagination_class = (
+        AdminReturnRequestPagination
+    )
+
+    def get_queryset(self):
+        queryset = (
+            ReturnRequest.objects
+            .select_related(
+                "order",
+                "user",
+                "processed_by",
+            )
+            .prefetch_related(
+                "items",
+                "items__order_item",
+                "items__order_item__product",
+                "items__order_item__variant",
+                "items__replacement_variant",
+            )
+        )
+
+        search = (
+            self.request
+            .query_params
+            .get(
+                "search",
+                "",
+            )
+            .strip()
+        )
+
+        request_status = (
+            self.request
+            .query_params
+            .get(
+                "status",
+                "",
+            )
+            .strip()
+        )
+
+        request_type = (
+            self.request
+            .query_params
+            .get(
+                "request_type",
+                "",
+            )
+            .strip()
+        )
+
+        reason = (
+            self.request
+            .query_params
+            .get(
+                "reason",
+                "",
+            )
+            .strip()
+        )
+
+        if search:
+            queryset = (
+                queryset.filter(
+                    Q(
+                        return_number__icontains=(
+                            search
+                        )
+                    )
+                    | Q(
+                        order__order_number__icontains=(
+                            search
+                        )
+                    )
+                    | Q(
+                        order__full_name__icontains=(
+                            search
+                        )
+                    )
+                    | Q(
+                        order__phone__icontains=(
+                            search
+                        )
+                    )
+                    | Q(
+                        user__email__icontains=(
+                            search
+                        )
+                    )
+                )
+            )
+
+        if request_status:
+            queryset = queryset.filter(
+                status=request_status,
+            )
+
+        if request_type:
+            queryset = queryset.filter(
+                request_type=request_type,
+            )
+
+        if reason:
+            queryset = queryset.filter(
+                reason=reason,
+            )
+
+        return queryset.order_by(
+            "-created_at"
+        )
+
+
+# =========================================================
+# Admin Return / Exchange Detail
+# =========================================================
+
+class AdminReturnRequestDetailView(
+    generics.RetrieveAPIView
+):
+    """
+    GET /api/orders/admin/returns/<return_number>/
+    """
+
+    serializer_class = (
+        ReturnRequestSerializer
+    )
+
+    permission_classes = [
+        permissions.IsAdminUser,
+    ]
+
+    lookup_field = (
+        "return_number"
+    )
+
+    lookup_url_kwarg = (
+        "return_number"
+    )
+
+    def get_queryset(self):
+        return (
+            ReturnRequest.objects
+            .select_related(
+                "order",
+                "user",
+                "processed_by",
+            )
+            .prefetch_related(
+                "items",
+                "items__order_item",
+                "items__order_item__product",
+                "items__order_item__variant",
+                "items__replacement_variant",
+            )
+        )
+
+
+# =========================================================
+# Admin Return / Exchange Status Update
+# =========================================================
+
+class AdminReturnRequestStatusUpdateView(
+    APIView
+):
+    """
+    PATCH /api/orders/admin/returns/<return_number>/status/
+
+    Example:
+    {
+        "status": "approved",
+        "admin_note": "Return approved."
+    }
+    """
+
+    permission_classes = [
+        permissions.IsAdminUser,
+    ]
+
+    @transaction.atomic
+    def patch(
+        self,
+        request,
+        return_number,
+    ):
+        return_request = (
+            get_object_or_404(
+                ReturnRequest.objects
+                .select_for_update()
+                .select_related(
+                    "order",
+                    "user",
+                ),
+                return_number=return_number,
+            )
+        )
+
+        new_status = str(
+            request.data.get(
+                "status",
+                "",
+            )
+            or ""
+        ).strip()
+
+        admin_note = str(
+            request.data.get(
+                "admin_note",
+                return_request.admin_note,
+            )
+            or ""
+        ).strip()
+
+        allowed_statuses = {
+            choice[0]
+            for choice
+            in (
+                ReturnRequest
+                .STATUS_CHOICES
+            )
+        }
+
+        if (
+            not new_status
+            or new_status
+            not in allowed_statuses
+        ):
+            return Response(
+                {
+                    "status": (
+                        "Please provide a valid "
+                        "return / exchange status."
+                    )
+                },
+                status=(
+                    status
+                    .HTTP_400_BAD_REQUEST
+                ),
+            )
+
+        # -------------------------------------------------
+        # Closed request protection
+        # -------------------------------------------------
+
+        if (
+            return_request.is_closed
+            and new_status
+            != return_request.status
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "A completed, rejected, or "
+                        "cancelled request cannot "
+                        "be reopened."
+                    )
+                },
+                status=(
+                    status
+                    .HTTP_400_BAD_REQUEST
+                ),
+            )
+
+        now = timezone.now()
+
+        return_request.status = (
+            new_status
+        )
+
+        return_request.admin_note = (
+            admin_note
+        )
+
+        return_request.processed_by = (
+            request.user
+        )
+
+        update_fields = [
+            "status",
+            "admin_note",
+            "processed_by",
+            "updated_at",
+        ]
+
+        # -------------------------------------------------
+        # Approval
+        # -------------------------------------------------
+
+        if (
+            new_status
+            == "approved"
+            and return_request.approved_at
+            is None
+        ):
+            return_request.approved_at = (
+                now
+            )
+
+            update_fields.append(
+                "approved_at"
+            )
+
+        # -------------------------------------------------
+        # Rejection
+        # -------------------------------------------------
+
+        if (
+            new_status
+            == "rejected"
+            and return_request.rejected_at
+            is None
+        ):
+            return_request.rejected_at = (
+                now
+            )
+
+            update_fields.append(
+                "rejected_at"
+            )
+
+        # -------------------------------------------------
+        # Received
+        # -------------------------------------------------
+
+        if (
+            new_status
+            == "received"
+            and return_request.received_at
+            is None
+        ):
+            return_request.received_at = (
+                now
+            )
+
+            update_fields.append(
+                "received_at"
+            )
+
+        # -------------------------------------------------
+        # Completed
+        # -------------------------------------------------
+
+        if (
+            new_status
+            == "completed"
+            and return_request.completed_at
+            is None
+        ):
+            return_request.completed_at = (
+                now
+            )
+
+            update_fields.append(
+                "completed_at"
+            )
+
+        return_request.save(
+            update_fields=list(
+                dict.fromkeys(
+                    update_fields
+                )
+            )
+        )
+
+        # -------------------------------------------------
+        # Keep Order Status In Sync
+        # -------------------------------------------------
+
+        order = (
+            Order.objects
+            .select_for_update()
+            .get(
+                pk=return_request.order_id,
+            )
+        )
+
+        target_order_status = None
+
+        if new_status == "approved":
+
+            if (
+                return_request.request_type
+                == "exchange"
+            ):
+                target_order_status = (
+                    "exchange_approved"
+                )
+
+            else:
+                target_order_status = (
+                    "return_approved"
+                )
+
+        elif new_status in {
+            "pickup_scheduled",
+            "picked_up",
+            "in_transit",
+        }:
+
+            target_order_status = (
+                "return_in_transit"
+            )
+
+        elif new_status in {
+            "received",
+            "inspection_pending",
+            "inspection_completed",
+            "refund_pending",
+        }:
+
+            if (
+                return_request.request_type
+                == "return"
+            ):
+                target_order_status = (
+                    "return_in_transit"
+                )
+
+        elif new_status == "refunded":
+
+            target_order_status = (
+                "refunded"
+            )
+
+        elif new_status in {
+            "exchange_pending",
+            "exchange_shipped",
+        }:
+
+            target_order_status = (
+                "exchange_approved"
+            )
+
+        elif new_status == "completed":
+
+            if (
+                return_request.request_type
+                == "exchange"
+            ):
+                target_order_status = (
+                    "exchanged"
+                )
+
+            else:
+                target_order_status = (
+                    "returned"
+                )
+
+        elif new_status in {
+            "rejected",
+            "cancelled",
+        }:
+
+            target_order_status = (
+                "delivered"
+            )
+
+        if (
+            target_order_status
+            and order.status
+            != target_order_status
+        ):
+            order.status = (
+                target_order_status
+            )
+
+            order.save(
+                update_fields=[
+                    "status",
+                    "updated_at",
+                ]
+            )
+
+        return_request.refresh_from_db()
+
+        response_serializer = (
+            ReturnRequestSerializer(
+                return_request,
+                context={
+                    "request":
+                        request,
+                },
+            )
+        )
+
+        return Response(
+            {
+                "message": (
+                    "Return / exchange status "
+                    "updated successfully."
+                ),
+                "return_request":
+                    response_serializer.data,
+            },
+            status=(
+                status
+                .HTTP_200_OK
+            ),
+        )

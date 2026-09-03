@@ -1953,6 +1953,80 @@ export async function fetchOrder(
     )}/`
   );
 }
+// =========================================================
+// Return / Exchange
+// =========================================================
+
+export async function fetchMyReturnRequests() {
+  return apiRequest(
+    "/orders/returns/"
+  );
+}
+
+
+export async function fetchReturnRequest(
+  returnNumber
+) {
+  requireValue(
+    returnNumber,
+    "Return request number is required."
+  );
+
+
+  return apiRequest(
+    `/orders/returns/${encodeURIComponent(
+      returnNumber
+    )}/`
+  );
+}
+
+
+export async function createReturnRequest(
+  payload
+) {
+  if (
+    !payload
+  ) {
+    throw new Error(
+      "Return / exchange request data is required."
+    );
+  }
+
+
+  return apiRequest(
+    "/orders/returns/create/",
+    {
+      method:
+        "POST",
+
+      body:
+        JSON.stringify(
+          payload
+        ),
+    }
+  );
+}
+
+
+export async function cancelReturnRequest(
+  returnNumber
+) {
+  requireValue(
+    returnNumber,
+    "Return request number is required."
+  );
+
+
+  return apiRequest(
+    `/orders/returns/${encodeURIComponent(
+      returnNumber
+    )}/cancel/`,
+    {
+      method:
+        "POST",
+    }
+  );
+}
 
 
 // =========================================================

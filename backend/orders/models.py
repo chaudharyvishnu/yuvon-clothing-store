@@ -151,7 +151,18 @@ class Order(models.Model):
         ("out_for_delivery", "Out For Delivery"),
         ("delivered", "Delivered"),
         ("cancelled", "Cancelled"),
+
+        # Return / Exchange
+        ("return_requested", "Return Requested"),
+        ("exchange_requested", "Exchange Requested"),
+        ("return_approved", "Return Approved"),
+        ("exchange_approved", "Exchange Approved"),
+        ("return_in_transit", "Return In Transit"),
         ("returned", "Returned"),
+        ("exchanged", "Exchanged"),
+
+        # Refund
+        ("refund_pending", "Refund Pending"),
         ("refunded", "Refunded"),
     )
 
@@ -390,9 +401,6 @@ class Order(models.Model):
         blank=True,
         db_index=True,
     )
-
-    # Generic compatibility fields.
-    # Existing code agar in names ko use karta hai to break nahi hoga.
 
     shipment_id = models.CharField(
         max_length=150,
@@ -645,6 +653,7 @@ class Order(models.Model):
 
     @staticmethod
     def generate_order_number():
+
         unique_code = (
             uuid.uuid4()
             .hex[:10]
@@ -668,6 +677,7 @@ class Order(models.Model):
 
     @property
     def full_address(self):
+
         address_parts = [
             self.address_line_1,
             self.address_line_2,
@@ -686,6 +696,7 @@ class Order(models.Model):
 
     @property
     def is_paid(self):
+
         return (
             self.payment_status
             == "paid"
@@ -693,6 +704,7 @@ class Order(models.Model):
 
     @property
     def is_cancellable(self):
+
         return (
             self.status
             in {
@@ -706,6 +718,7 @@ class Order(models.Model):
 
     @property
     def has_shipment(self):
+
         return bool(
             self.shiprocket_shipment_id
             or self.shipment_id
@@ -715,12 +728,14 @@ class Order(models.Model):
 
     @property
     def has_awb(self):
+
         return bool(
             self.awb_code
         )
 
     @property
     def can_track(self):
+
         return bool(
             self.awb_code
             or self.tracking_id
@@ -729,6 +744,7 @@ class Order(models.Model):
 
     @property
     def is_delivered(self):
+
         return (
             self.status
             == "delivered"
@@ -736,13 +752,26 @@ class Order(models.Model):
 
     @property
     def is_cancelled(self):
+
         return (
             self.status
             == "cancelled"
         )
 
     @property
+    def has_return_request(self):
+
+        return self.return_requests.exclude(
+            status__in=[
+                "rejected",
+                "cancelled",
+                "completed",
+            ]
+        ).exists()
+
+    @property
     def shiprocket_reference_id(self):
+
         return (
             self.shiprocket_shipment_id
             or self.shipment_id
@@ -840,6 +869,7 @@ class OrderItem(models.Model):
     )
 
     class Meta:
+
         ordering = (
             "id",
         )
@@ -856,6 +886,7 @@ class OrderItem(models.Model):
         ]
 
     def __str__(self):
+
         return (
             f"{self.product_name} "
             f"x {self.quantity}"
@@ -866,6 +897,7 @@ class OrderItem(models.Model):
         *args,
         **kwargs,
     ):
+
         self.total_price = (
             self.unit_price
             * self.quantity
@@ -889,6 +921,7 @@ class Payment(models.Model):
         ("authorized", "Authorized"),
         ("captured", "Captured"),
         ("failed", "Failed"),
+        ("partially_refunded", "Partially Refunded"),
         ("refunded", "Refunded"),
     )
 
@@ -949,6 +982,30 @@ class Payment(models.Model):
     )
 
     # =====================================================
+    # Refund
+    # =====================================================
+
+    refunded_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        validators=[
+            MinValueValidator(0),
+        ],
+    )
+
+    refund_id = models.CharField(
+        max_length=150,
+        blank=True,
+        db_index=True,
+    )
+
+    refunded_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    # =====================================================
     # Payment Failure Details
     # =====================================================
 
@@ -985,6 +1042,11 @@ class Payment(models.Model):
         blank=True,
     )
 
+    refund_response = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
     # =====================================================
     # Timeline
     # =====================================================
@@ -1003,6 +1065,7 @@ class Payment(models.Model):
     )
 
     class Meta:
+
         ordering = (
             "-created_at",
         )
@@ -1020,6 +1083,7 @@ class Payment(models.Model):
         ]
 
     def __str__(self):
+
         return (
             f"{self.order.order_number} - "
             f"{self.status}"
@@ -1027,6 +1091,7 @@ class Payment(models.Model):
 
     @property
     def is_successful(self):
+
         return (
             self.status
             == "captured"
@@ -1034,7 +1099,468 @@ class Payment(models.Model):
 
     @property
     def is_refunded(self):
+
         return (
             self.status
             == "refunded"
+        )
+
+
+# =========================================================
+# Return / Exchange Request
+# =========================================================
+
+class ReturnRequest(models.Model):
+
+    REQUEST_TYPE_CHOICES = (
+        ("return", "Return"),
+        ("exchange", "Exchange"),
+    )
+
+    STATUS_CHOICES = (
+        ("requested", "Requested"),
+        ("approved", "Approved"),
+        ("rejected", "Rejected"),
+        ("pickup_scheduled", "Pickup Scheduled"),
+        ("picked_up", "Picked Up"),
+        ("in_transit", "In Transit"),
+        ("received", "Received"),
+        ("inspection_pending", "Inspection Pending"),
+        ("inspection_completed", "Inspection Completed"),
+        ("refund_pending", "Refund Pending"),
+        ("refunded", "Refunded"),
+        ("exchange_pending", "Exchange Pending"),
+        ("exchange_shipped", "Exchange Shipped"),
+        ("completed", "Completed"),
+        ("cancelled", "Cancelled"),
+    )
+
+    REASON_CHOICES = (
+        ("wrong_size", "Wrong Size"),
+        ("wrong_product", "Wrong Product"),
+        ("damaged", "Damaged Product"),
+        ("defective", "Defective Product"),
+        ("quality_issue", "Quality Issue"),
+        ("not_as_expected", "Not As Expected"),
+        ("colour_issue", "Colour Issue"),
+        ("fit_issue", "Fit Issue"),
+        ("changed_mind", "Changed Mind"),
+        ("other", "Other"),
+    )
+
+    return_number = models.CharField(
+        max_length=40,
+        unique=True,
+        editable=False,
+        db_index=True,
+    )
+
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.CASCADE,
+        related_name="return_requests",
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="return_requests",
+        null=True,
+        blank=True,
+    )
+
+    request_type = models.CharField(
+        max_length=20,
+        choices=REQUEST_TYPE_CHOICES,
+        default="return",
+        db_index=True,
+    )
+
+    status = models.CharField(
+        max_length=30,
+        choices=STATUS_CHOICES,
+        default="requested",
+        db_index=True,
+    )
+
+    reason = models.CharField(
+        max_length=50,
+        choices=REASON_CHOICES,
+        default="other",
+    )
+
+    reason_details = models.TextField(
+        blank=True,
+    )
+
+    customer_note = models.TextField(
+        blank=True,
+    )
+
+    admin_note = models.TextField(
+        blank=True,
+    )
+
+    # =====================================================
+    # Return Pickup / Courier
+    # =====================================================
+
+    courier_name = models.CharField(
+        max_length=150,
+        blank=True,
+    )
+
+    courier_service = models.CharField(
+        max_length=150,
+        blank=True,
+    )
+
+    courier_company_id = models.CharField(
+        max_length=100,
+        blank=True,
+    )
+
+    awb_code = models.CharField(
+        max_length=150,
+        blank=True,
+        db_index=True,
+    )
+
+    tracking_id = models.CharField(
+        max_length=150,
+        blank=True,
+        db_index=True,
+    )
+
+    tracking_url = models.URLField(
+        max_length=1000,
+        blank=True,
+    )
+
+    pickup_scheduled = models.BooleanField(
+        default=False,
+    )
+
+    pickup_scheduled_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    # =====================================================
+    # Shiprocket Return Shipment
+    # =====================================================
+
+    shiprocket_order_id = models.CharField(
+        max_length=150,
+        blank=True,
+        db_index=True,
+    )
+
+    shiprocket_shipment_id = models.CharField(
+        max_length=150,
+        blank=True,
+        db_index=True,
+    )
+
+    shipping_status = models.CharField(
+        max_length=100,
+        blank=True,
+    )
+
+    shipping_response = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
+    tracking_response = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
+    # =====================================================
+    # Refund
+    # =====================================================
+
+    refund_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        validators=[
+            MinValueValidator(0),
+        ],
+    )
+
+    refund_id = models.CharField(
+        max_length=150,
+        blank=True,
+        db_index=True,
+    )
+
+    refund_status = models.CharField(
+        max_length=50,
+        blank=True,
+    )
+
+    refund_response = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
+    refunded_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    # =====================================================
+    # Admin Processing
+    # =====================================================
+
+    processed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="processed_return_requests",
+        null=True,
+        blank=True,
+    )
+
+    approved_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    rejected_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    received_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+
+        ordering = (
+            "-created_at",
+        )
+
+        verbose_name = "Return / Exchange Request"
+        verbose_name_plural = "Return / Exchange Requests"
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "order",
+                    "status",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "request_type",
+                    "status",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "user",
+                    "created_at",
+                ]
+            ),
+        ]
+
+    def __str__(self):
+
+        return (
+            f"{self.return_number} - "
+            f"{self.get_request_type_display()}"
+        )
+
+    def save(
+        self,
+        *args,
+        **kwargs,
+    ):
+
+        if not self.return_number:
+
+            unique_code = (
+                uuid.uuid4()
+                .hex[:10]
+                .upper()
+            )
+
+            self.return_number = (
+                f"RTN-{unique_code}"
+            )
+
+        super().save(
+            *args,
+            **kwargs,
+        )
+
+    @property
+    def is_return(self):
+
+        return (
+            self.request_type
+            == "return"
+        )
+
+    @property
+    def is_exchange(self):
+
+        return (
+            self.request_type
+            == "exchange"
+        )
+
+    @property
+    def is_closed(self):
+
+        return (
+            self.status
+            in {
+                "completed",
+                "rejected",
+                "cancelled",
+            }
+        )
+
+
+# =========================================================
+# Return / Exchange Item
+# =========================================================
+
+class ReturnItem(models.Model):
+
+    return_request = models.ForeignKey(
+        ReturnRequest,
+        on_delete=models.CASCADE,
+        related_name="items",
+    )
+
+    order_item = models.ForeignKey(
+        OrderItem,
+        on_delete=models.PROTECT,
+        related_name="return_items",
+    )
+
+    quantity = models.PositiveIntegerField(
+        default=1,
+        validators=[
+            MinValueValidator(1),
+        ],
+    )
+
+    refund_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        validators=[
+            MinValueValidator(0),
+        ],
+    )
+
+    # =====================================================
+    # Exchange Variant
+    # =====================================================
+
+    replacement_variant = models.ForeignKey(
+        "products.ProductVariant",
+        on_delete=models.SET_NULL,
+        related_name="replacement_return_items",
+        null=True,
+        blank=True,
+    )
+
+    replacement_color = models.CharField(
+        max_length=100,
+        blank=True,
+    )
+
+    replacement_size = models.CharField(
+        max_length=50,
+        blank=True,
+    )
+
+    # =====================================================
+    # Inspection
+    # =====================================================
+
+    inspection_status = models.CharField(
+        max_length=50,
+        blank=True,
+    )
+
+    inspection_note = models.TextField(
+        blank=True,
+    )
+
+    is_accepted = models.BooleanField(
+        null=True,
+        blank=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+
+        ordering = (
+            "id",
+        )
+
+        verbose_name = "Return / Exchange Item"
+        verbose_name_plural = "Return / Exchange Items"
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "return_request",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "order_item",
+                ]
+            ),
+        ]
+
+    def __str__(self):
+
+        return (
+            f"{self.return_request.return_number} - "
+            f"{self.order_item.product_name}"
+        )
+
+    @property
+    def product_name(self):
+
+        return (
+            self.order_item.product_name
+        )
+
+    @property
+    def original_unit_price(self):
+
+        return (
+            self.order_item.unit_price
         )

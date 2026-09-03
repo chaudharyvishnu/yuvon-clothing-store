@@ -8,6 +8,11 @@ from .views import (
     AdminOrderStatusUpdateView,
     AdminOrderUpdateView,
 
+    # Return / Exchange Admin Views
+    AdminReturnRequestDetailView,
+    AdminReturnRequestListView,
+    AdminReturnRequestStatusUpdateView,
+
     # Shiprocket Admin Views
     AdminShiprocketAssignAWBView,
     AdminShiprocketCreateOrderView,
@@ -18,15 +23,28 @@ from .views import (
     AdminShiprocketTrackingView,
 
     CancelOrderView,
+
+    # Return / Exchange Customer Views
+    CancelReturnRequestView,
+
     CheckoutView,
     GuestOrderLookupView,
     InvoiceDownloadView,
     MyOrderDetailView,
     MyOrderListView,
+
+    # Return / Exchange Customer Views
+    MyReturnRequestDetailView,
+    MyReturnRequestListView,
+
     MyOrderTrackingView,
     RazorpayCreateOrderView,
     RazorpayFailureView,
     RazorpayVerifyPaymentView,
+
+    # Return / Exchange Customer Views
+    ReturnRequestCreateView,
+
     ShippingAddressDetailView,
     ShippingAddressListCreateView,
 )
@@ -93,6 +111,30 @@ urlpatterns = [
     ),
 
     # =====================================================
+    # Return / Exchange - Customer
+    # =====================================================
+    path(
+        "returns/",
+        MyReturnRequestListView.as_view(),
+        name="my-return-request-list",
+    ),
+    path(
+        "returns/create/",
+        ReturnRequestCreateView.as_view(),
+        name="return-request-create",
+    ),
+    path(
+        "returns/<str:return_number>/cancel/",
+        CancelReturnRequestView.as_view(),
+        name="return-request-cancel",
+    ),
+    path(
+        "returns/<str:return_number>/",
+        MyReturnRequestDetailView.as_view(),
+        name="my-return-request-detail",
+    ),
+
+    # =====================================================
     # Guest Order Lookup
     # =====================================================
     path(
@@ -113,6 +155,25 @@ urlpatterns = [
         "addresses/<int:pk>/",
         ShippingAddressDetailView.as_view(),
         name="shipping-address-detail",
+    ),
+
+    # =====================================================
+    # Admin Return / Exchange
+    # =====================================================
+    path(
+        "admin/returns/",
+        AdminReturnRequestListView.as_view(),
+        name="admin-return-request-list",
+    ),
+    path(
+        "admin/returns/<str:return_number>/status/",
+        AdminReturnRequestStatusUpdateView.as_view(),
+        name="admin-return-request-status",
+    ),
+    path(
+        "admin/returns/<str:return_number>/",
+        AdminReturnRequestDetailView.as_view(),
+        name="admin-return-request-detail",
     ),
 
     # =====================================================
