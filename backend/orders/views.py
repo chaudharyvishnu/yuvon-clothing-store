@@ -4257,11 +4257,7 @@ class AdminReturnRequestStatusUpdateView(
         return_request = (
             get_object_or_404(
                 ReturnRequest.objects
-                .select_for_update()
-                .select_related(
-                    "order",
-                    "user",
-                ),
+                .select_for_update(),
                 return_number=return_number,
             )
         )
