@@ -77,6 +77,14 @@ import AdminOrderDetails from "./components/admin/AdminOrderDetails";
 
 
 // =========================================================
+// Admin Returns / Exchanges
+// =========================================================
+
+import AdminReturns from "./components/admin/AdminReturns";
+import AdminReturnDetails from "./components/admin/AdminReturnDetails";
+
+
+// =========================================================
 // Admin Products
 // =========================================================
 
@@ -296,6 +304,30 @@ function App() {
               element={
                 <AdminRoute>
                   <AdminOrderDetails />
+                </AdminRoute>
+              }
+            />
+
+
+            {/* ==========================================
+                Admin Returns / Exchanges
+            ========================================== */}
+
+            <Route
+              path="/admin/returns"
+              element={
+                <AdminRoute>
+                  <AdminReturns />
+                </AdminRoute>
+              }
+            />
+
+
+            <Route
+              path="/admin/returns/:returnNumber"
+              element={
+                <AdminRoute>
+                  <AdminReturnDetails />
                 </AdminRoute>
               }
             />

@@ -3,6 +3,10 @@ import {
   useState,
 } from "react";
 
+import {
+  Link,
+} from "react-router-dom";
+
 import useDashboard from "../../hooks/useDashboard";
 
 import SalesChart from "../../components/admin/SalesChart";
@@ -169,6 +173,42 @@ const Dashboard = () => {
 
 
   /* =======================================================
+     Admin Management Links
+  ======================================================= */
+
+  const managementCards = [
+    {
+      title: "Orders",
+      description:
+        "View customer orders, update order status and manage shipping.",
+      link: "/admin/orders",
+      action: "Manage Orders",
+    },
+    {
+      title: "Returns & Exchanges",
+      description:
+        "Review customer return and exchange requests and update their status.",
+      link: "/admin/returns",
+      action: "Manage Returns",
+    },
+    {
+      title: "Products",
+      description:
+        "Manage products, pricing, inventory, variants and product details.",
+      link: "/admin/products",
+      action: "Manage Products",
+    },
+    {
+      title: "Bulk Upload",
+      description:
+        "Upload product data in bulk using the admin product upload tools.",
+      link: "/admin/products/bulk-upload",
+      action: "Bulk Upload",
+    },
+  ];
+
+
+  /* =======================================================
      Filters
   ======================================================= */
 
@@ -242,6 +282,14 @@ const Dashboard = () => {
         </div>
 
         <div className="dashboard-header-actions">
+
+          <Link
+            to="/admin/returns"
+            className="dashboard-button dashboard-button-primary"
+          >
+            Manage Returns
+          </Link>
+
           <button
             type="button"
             className="dashboard-button dashboard-button-secondary"
@@ -262,7 +310,95 @@ const Dashboard = () => {
                 ? "Updating..."
                 : "Refresh"}
           </button>
+
         </div>
+      </section>
+
+
+      {/* ===================================================
+          Admin Management
+      =================================================== */}
+
+      <section className="dashboard-section">
+
+        <div className="dashboard-section-header">
+          <div>
+            <h2>
+              Admin Management
+            </h2>
+
+            <p>
+              Quick access to daily store management.
+            </p>
+          </div>
+        </div>
+
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: "16px",
+          }}
+        >
+
+          {managementCards.map(
+            (item) => (
+              <article
+                key={item.title}
+                className="dashboard-panel"
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  minHeight: "190px",
+                }}
+              >
+
+                <span className="dashboard-panel-label">
+                  Admin
+                </span>
+
+                <strong
+                  className="dashboard-panel-value"
+                  style={{
+                    fontSize: "1.25rem",
+                  }}
+                >
+                  {item.title}
+                </strong>
+
+                <p
+                  style={{
+                    marginTop: "10px",
+                    marginBottom: "18px",
+                    lineHeight: "1.6",
+                    color: "#6b7280",
+                    fontSize: "0.9rem",
+                  }}
+                >
+                  {item.description}
+                </p>
+
+                <div
+                  style={{
+                    marginTop: "auto",
+                  }}
+                >
+                  <Link
+                    to={item.link}
+                    className="dashboard-button dashboard-button-primary"
+                  >
+                    {item.action}
+                  </Link>
+                </div>
+
+              </article>
+            )
+          )}
+
+        </div>
+
       </section>
 
 
@@ -669,6 +805,13 @@ const Dashboard = () => {
                 Latest customer orders.
               </p>
             </div>
+
+            <Link
+              to="/admin/orders"
+              className="dashboard-button dashboard-button-secondary"
+            >
+              View All Orders
+            </Link>
           </div>
 
           <div className="dashboard-table-wrap">

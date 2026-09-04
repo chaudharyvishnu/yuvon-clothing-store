@@ -2655,6 +2655,94 @@ export async function toggleReviewHelpful(
 
 
 // =========================================================
+// Admin Return / Exchange Management
+// =========================================================
+
+export async function fetchAdminReturnRequests(
+  params = {}
+) {
+  const query =
+    createQueryString(
+      params
+    );
+
+
+  return apiRequest(
+    `/orders/admin/returns/${
+      query
+        ? `?${query}`
+        : ""
+    }`
+  );
+}
+
+
+export async function fetchAdminReturnRequestDetail(
+  returnNumber
+) {
+  requireValue(
+    returnNumber,
+    "Return request number is required."
+  );
+
+
+  return apiRequest(
+    `/orders/admin/returns/${encodeURIComponent(
+      returnNumber
+    )}/`
+  );
+}
+
+
+export async function updateAdminReturnRequestStatus(
+  returnNumber,
+  payload
+) {
+  requireValue(
+    returnNumber,
+    "Return request number is required."
+  );
+
+
+  if (
+    !payload ||
+    typeof payload !==
+      "object"
+  ) {
+    throw new Error(
+      "Return / exchange update data is required."
+    );
+  }
+
+
+  return apiRequest(
+    `/orders/admin/returns/${encodeURIComponent(
+      returnNumber
+    )}/status/`,
+    {
+      method:
+        "PATCH",
+
+      body:
+        JSON.stringify(
+          payload
+        ),
+    }
+  );
+}
+
+
+// =========================================================
+// Admin Orders
+// =========================================================
+
+
+// =========================================================
+// Admin Orders
+// =========================================================
+
+
+// =========================================================
 // Admin Orders
 // =========================================================
 
