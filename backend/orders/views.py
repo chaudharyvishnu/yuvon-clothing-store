@@ -39,6 +39,7 @@ from reportlab.platypus import (
 from .models import (
     Order,
     Payment,
+    ReturnItem,
     ReturnRequest,
     ShippingAddress,
 )
@@ -47,6 +48,7 @@ from .serializers import (
     AdminOrderListSerializer,
     AdminOrderStatusSerializer,
     AdminOrderUpdateSerializer,
+    AdminReturnItemInspectionSerializer,
     CheckoutSerializer,
     OrderSerializer,
     ReturnRequestCreateSerializer,
@@ -4306,6 +4308,33 @@ class AdminReturnRequestStatusUpdateView(
             )
 
         # -------------------------------------------------
+        # Direct refund-status protection
+        # -------------------------------------------------
+        #
+        # "refunded" must only be reached through the dedicated
+        # refund-processing endpoint so that Payment, Order and
+        # gateway refund data stay in sync.
+        # -------------------------------------------------
+
+        if (
+            new_status == "refunded"
+            and return_request.status != "refunded"
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "Do not mark a return as refunded "
+                        "manually. Use the dedicated refund "
+                        "processing endpoint."
+                    )
+                },
+                status=(
+                    status
+                    .HTTP_400_BAD_REQUEST
+                ),
+            )
+
+        # -------------------------------------------------
         # Closed request protection
         # -------------------------------------------------
 
@@ -4558,6 +4587,1213 @@ class AdminReturnRequestStatusUpdateView(
                 ),
                 "return_request":
                     response_serializer.data,
+            },
+            status=(
+                status
+                .HTTP_200_OK
+            ),
+        )
+
+
+# =========================================================
+# Admin Return / Exchange Item Inspection
+# =========================================================
+
+class AdminReturnItemInspectionView(
+    APIView
+):
+    """
+    PATCH
+    /api/orders/admin/returns/<return_number>/items/<item_id>/inspection/
+
+    Example:
+    {
+        "inspection_status": "approved",
+        "inspection_note": "Item received in acceptable condition.",
+        "is_accepted": true,
+        "refund_amount": "499.00"
+    }
+
+    Notes:
+    - The ReturnRequest row is locked first.
+    - The ReturnItem row is then locked separately.
+    - This avoids PostgreSQL SELECT FOR UPDATE errors caused
+      by locking nullable OUTER JOIN relations.
+    """
+
+    permission_classes = [
+        permissions.IsAdminUser,
+    ]
+
+    @transaction.atomic
+    def patch(
+        self,
+        request,
+        return_number,
+        item_id,
+    ):
+        # -------------------------------------------------
+        # Lock parent request without nullable joins
+        # -------------------------------------------------
+
+        return_request = (
+            get_object_or_404(
+                ReturnRequest.objects
+                .select_for_update(),
+                return_number=return_number,
+            )
+        )
+
+        # -------------------------------------------------
+        # Closed request protection
+        # -------------------------------------------------
+
+        if return_request.is_closed:
+            return Response(
+                {
+                    "detail": (
+                        "A completed, rejected, or "
+                        "cancelled request cannot "
+                        "be inspected."
+                    )
+                },
+                status=(
+                    status
+                    .HTTP_400_BAD_REQUEST
+                ),
+            )
+
+        # -------------------------------------------------
+        # Inspection is meaningful only after approval
+        # -------------------------------------------------
+
+        allowed_request_statuses = {
+            "approved",
+            "pickup_scheduled",
+            "picked_up",
+            "in_transit",
+            "received",
+            "inspection_pending",
+            "inspection_completed",
+            "refund_pending",
+            "exchange_pending",
+        }
+
+        if (
+            return_request.status
+            not in allowed_request_statuses
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "This return / exchange request "
+                        "is not ready for item inspection."
+                    )
+                },
+                status=(
+                    status
+                    .HTTP_400_BAD_REQUEST
+                ),
+            )
+
+        # -------------------------------------------------
+        # Lock the requested ReturnItem separately
+        # -------------------------------------------------
+
+        return_item = (
+            get_object_or_404(
+                ReturnItem.objects
+                .select_for_update(),
+                pk=item_id,
+                return_request_id=(
+                    return_request.pk
+                ),
+            )
+        )
+
+        serializer = (
+            AdminReturnItemInspectionSerializer(
+                return_item,
+                data=request.data,
+                partial=True,
+                context={
+                    "request":
+                        request,
+                    "return_request":
+                        return_request,
+                },
+            )
+        )
+
+        serializer.is_valid(
+            raise_exception=True
+        )
+
+        inspected_item = (
+            serializer.save()
+        )
+
+        # -------------------------------------------------
+        # Recalculate request refund amount
+        # -------------------------------------------------
+
+        if (
+            return_request.request_type
+            == "return"
+        ):
+            accepted_refund_total = (
+                ReturnItem.objects
+                .filter(
+                    return_request=(
+                        return_request
+                    ),
+                    is_accepted=True,
+                )
+                .aggregate(
+                    total=Sum(
+                        "refund_amount"
+                    )
+                )
+                .get(
+                    "total"
+                )
+                or Decimal(
+                    "0.00"
+                )
+            )
+
+            return_request.refund_amount = (
+                accepted_refund_total
+            )
+
+        # -------------------------------------------------
+        # Determine whether every item has been inspected
+        # -------------------------------------------------
+
+        return_items = list(
+            ReturnItem.objects
+            .filter(
+                return_request=(
+                    return_request
+                )
+            )
+            .only(
+                "id",
+                "inspection_status",
+                "is_accepted",
+            )
+        )
+
+        all_items_inspected = bool(
+            return_items
+        ) and all(
+            bool(
+                str(
+                    item.inspection_status
+                    or ""
+                ).strip()
+            )
+            and (
+                item.is_accepted
+                is not None
+            )
+            for item
+            in return_items
+        )
+
+        if all_items_inspected:
+            return_request.status = (
+                "inspection_completed"
+            )
+
+        elif (
+            return_request.status
+            in {
+                "received",
+                "inspection_completed",
+            }
+        ):
+            return_request.status = (
+                "inspection_pending"
+            )
+
+        return_request.processed_by = (
+            request.user
+        )
+
+        return_request.save(
+            update_fields=[
+                "status",
+                "refund_amount",
+                "processed_by",
+                "updated_at",
+            ]
+        )
+
+        # -------------------------------------------------
+        # Keep order workflow aligned
+        # -------------------------------------------------
+
+        order = (
+            Order.objects
+            .select_for_update()
+            .get(
+                pk=return_request.order_id,
+            )
+        )
+
+        if (
+            return_request.request_type
+            == "return"
+            and order.status
+            not in {
+                "refunded",
+                "returned",
+            }
+        ):
+            order.status = (
+                "return_in_transit"
+            )
+
+            order.save(
+                update_fields=[
+                    "status",
+                    "updated_at",
+                ]
+            )
+
+        # -------------------------------------------------
+        # Fresh response
+        # -------------------------------------------------
+
+        return_request = (
+            ReturnRequest.objects
+            .select_related(
+                "order",
+                "user",
+                "processed_by",
+            )
+            .prefetch_related(
+                "items",
+                "items__order_item",
+                "items__order_item__product",
+                "items__order_item__variant",
+                "items__replacement_variant",
+            )
+            .get(
+                pk=return_request.pk,
+            )
+        )
+
+        response_serializer = (
+            ReturnRequestSerializer(
+                return_request,
+                context={
+                    "request":
+                        request,
+                },
+            )
+        )
+
+        return Response(
+            {
+                "message": (
+                    "Return item inspection "
+                    "updated successfully."
+                ),
+                "item":
+                    AdminReturnItemInspectionSerializer(
+                        inspected_item,
+                        context={
+                            "request":
+                                request,
+                            "return_request":
+                                return_request,
+                        },
+                    ).data,
+                "return_request":
+                    response_serializer.data,
+            },
+            status=(
+                status
+                .HTTP_200_OK
+            ),
+        )
+# =========================================================
+# Admin Return Refund Processing
+# =========================================================
+
+class AdminReturnRequestRefundView(
+    APIView
+):
+    """
+    POST /api/orders/admin/returns/<return_number>/refund/
+
+    Processes the money refund for an inspected RETURN request.
+
+    Razorpay:
+    - Uses the captured gateway payment ID.
+    - Creates a Razorpay refund.
+    - Persists gateway refund information.
+
+    COD:
+    - Requires manual_refund_reference because cash refunds
+      cannot be pushed through Razorpay.
+
+    Example Razorpay body:
+    {}
+
+    Example COD body:
+    {
+        "manual_refund_reference": "CASH-REFUND-0001"
+    }
+    """
+
+    permission_classes = [
+        permissions.IsAdminUser,
+    ]
+
+    @transaction.atomic
+    def post(
+        self,
+        request,
+        return_number,
+    ):
+        # -------------------------------------------------
+        # Lock the return request without nullable joins.
+        # -------------------------------------------------
+
+        return_request = (
+            get_object_or_404(
+                ReturnRequest.objects
+                .select_for_update(),
+                return_number=return_number,
+            )
+        )
+
+        if (
+            return_request.request_type
+            != "return"
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "Refund processing is only available "
+                        "for return requests. Exchange requests "
+                        "must use the exchange workflow."
+                    )
+                },
+                status=(
+                    status
+                    .HTTP_400_BAD_REQUEST
+                ),
+            )
+
+        # -------------------------------------------------
+        # Idempotency / duplicate refund protection.
+        # -------------------------------------------------
+
+        if (
+            return_request.status
+            == "refunded"
+            or return_request.refunded_at
+            is not None
+        ):
+            fresh_request = (
+                ReturnRequest.objects
+                .select_related(
+                    "order",
+                    "user",
+                    "processed_by",
+                )
+                .prefetch_related(
+                    "items",
+                    "items__order_item",
+                    "items__order_item__product",
+                    "items__order_item__variant",
+                    "items__replacement_variant",
+                )
+                .get(
+                    pk=return_request.pk,
+                )
+            )
+
+            return Response(
+                {
+                    "message": (
+                        "This return has already "
+                        "been refunded."
+                    ),
+                    "return_request":
+                        ReturnRequestSerializer(
+                            fresh_request,
+                            context={
+                                "request":
+                                    request,
+                            },
+                        ).data,
+                },
+                status=(
+                    status
+                    .HTTP_200_OK
+                ),
+            )
+
+        if (
+            return_request.refund_status
+            == "processing"
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "A refund is already being processed "
+                        "for this return request."
+                    )
+                },
+                status=(
+                    status
+                    .HTTP_409_CONFLICT
+                ),
+            )
+
+        # -------------------------------------------------
+        # Refund is allowed only after inspection.
+        # -------------------------------------------------
+
+        if (
+            return_request.status
+            not in {
+                "inspection_completed",
+                "refund_pending",
+            }
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "Complete item inspection before "
+                        "processing the refund."
+                    )
+                },
+                status=(
+                    status
+                    .HTTP_400_BAD_REQUEST
+                ),
+            )
+
+        # -------------------------------------------------
+        # Calculate refund from accepted return items.
+        # -------------------------------------------------
+
+        accepted_items = (
+            ReturnItem.objects
+            .filter(
+                return_request=return_request,
+                is_accepted=True,
+            )
+        )
+
+        refund_amount = (
+            accepted_items
+            .aggregate(
+                total=Sum(
+                    "refund_amount"
+                )
+            )
+            .get(
+                "total"
+            )
+            or Decimal(
+                "0.00"
+            )
+        )
+
+        refund_amount = (
+            Decimal(
+                str(
+                    refund_amount
+                )
+            )
+            .quantize(
+                Decimal(
+                    "0.01"
+                )
+            )
+        )
+
+        if (
+            refund_amount
+            <= Decimal(
+                "0.00"
+            )
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "Refund amount is zero. Approve at "
+                        "least one inspected item with a "
+                        "positive refund amount first."
+                    )
+                },
+                status=(
+                    status
+                    .HTTP_400_BAD_REQUEST
+                ),
+            )
+
+        # Keep request total aligned with its accepted items.
+        return_request.refund_amount = (
+            refund_amount
+        )
+
+        # -------------------------------------------------
+        # Lock Order and Payment separately.
+        # -------------------------------------------------
+
+        order = (
+            Order.objects
+            .select_for_update()
+            .get(
+                pk=return_request.order_id,
+            )
+        )
+
+        payment = (
+            Payment.objects
+            .select_for_update()
+            .filter(
+                order=order,
+            )
+            .first()
+        )
+
+        if payment is None:
+            return Response(
+                {
+                    "detail": (
+                        "Payment record was not found "
+                        "for this order."
+                    )
+                },
+                status=(
+                    status
+                    .HTTP_400_BAD_REQUEST
+                ),
+            )
+
+        if (
+            order.payment_status
+            not in {
+                "paid",
+                "partially_refunded",
+                "refunded",
+            }
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "Only a paid order can be refunded."
+                    )
+                },
+                status=(
+                    status
+                    .HTTP_400_BAD_REQUEST
+                ),
+            )
+
+        already_refunded = (
+            Decimal(
+                str(
+                    payment.refunded_amount
+                    or 0
+                )
+            )
+            .quantize(
+                Decimal(
+                    "0.01"
+                )
+            )
+        )
+
+        paid_amount = (
+            Decimal(
+                str(
+                    payment.amount
+                    or 0
+                )
+            )
+            .quantize(
+                Decimal(
+                    "0.01"
+                )
+            )
+        )
+
+        remaining_refundable = (
+            paid_amount
+            - already_refunded
+        ).quantize(
+            Decimal(
+                "0.01"
+            )
+        )
+
+        if (
+            remaining_refundable
+            <= Decimal(
+                "0.00"
+            )
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "This payment has already been "
+                        "fully refunded."
+                    )
+                },
+                status=(
+                    status
+                    .HTTP_400_BAD_REQUEST
+                ),
+            )
+
+        if (
+            refund_amount
+            > remaining_refundable
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "Refund amount exceeds the remaining "
+                        "refundable payment amount."
+                    ),
+                    "refund_amount":
+                        refund_amount,
+                    "remaining_refundable":
+                        remaining_refundable,
+                },
+                status=(
+                    status
+                    .HTTP_400_BAD_REQUEST
+                ),
+            )
+
+        # -------------------------------------------------
+        # Mark request as processing before gateway action.
+        # -------------------------------------------------
+
+        return_request.status = (
+            "refund_pending"
+        )
+
+        return_request.refund_status = (
+            "processing"
+        )
+
+        return_request.processed_by = (
+            request.user
+        )
+
+        return_request.save(
+            update_fields=[
+                "status",
+                "refund_amount",
+                "refund_status",
+                "processed_by",
+                "updated_at",
+            ]
+        )
+
+        refund_response = {}
+        refund_id = ""
+
+        # -------------------------------------------------
+        # Razorpay refund
+        # -------------------------------------------------
+
+        if (
+            order.payment_method
+            == "razorpay"
+        ):
+            gateway_payment_id = str(
+                payment.gateway_payment_id
+                or payment.transaction_id
+                or ""
+            ).strip()
+
+            if not gateway_payment_id:
+                return_request.refund_status = (
+                    "failed"
+                )
+
+                return_request.refund_response = {
+                    "error": (
+                        "Gateway payment ID is missing."
+                    )
+                }
+
+                return_request.save(
+                    update_fields=[
+                        "refund_status",
+                        "refund_response",
+                        "updated_at",
+                    ]
+                )
+
+                return Response(
+                    {
+                        "detail": (
+                            "Razorpay payment ID is missing "
+                            "for this payment."
+                        )
+                    },
+                    status=(
+                        status
+                        .HTTP_400_BAD_REQUEST
+                    ),
+                )
+
+            amount_in_paise = int(
+                refund_amount
+                * 100
+            )
+
+            try:
+                client = (
+                    get_razorpay_client()
+                )
+
+                refund_response = (
+                    client.payment.refund(
+                        gateway_payment_id,
+                        {
+                            "amount":
+                                amount_in_paise,
+                            "notes": {
+                                "order_number":
+                                    order.order_number,
+                                "return_number":
+                                    return_request.return_number,
+                            },
+                        },
+                    )
+                )
+
+                if not isinstance(
+                    refund_response,
+                    dict,
+                ):
+                    refund_response = {
+                        "response":
+                            refund_response,
+                    }
+
+                refund_id = str(
+                    refund_response.get(
+                        "id",
+                        "",
+                    )
+                    or ""
+                ).strip()
+
+                if not refund_id:
+                    raise ValueError(
+                        "Razorpay refund response did "
+                        "not contain a refund ID."
+                    )
+
+            except Exception as error:
+                return_request.refund_status = (
+                    "failed"
+                )
+
+                return_request.refund_response = {
+                    "error":
+                        str(
+                            error
+                        ),
+                }
+
+                return_request.save(
+                    update_fields=[
+                        "refund_status",
+                        "refund_response",
+                        "updated_at",
+                    ]
+                )
+
+                return Response(
+                    {
+                        "detail": (
+                            "Unable to process the "
+                            "Razorpay refund."
+                        ),
+                        "error":
+                            str(
+                                error
+                            ),
+                    },
+                    status=(
+                        status
+                        .HTTP_502_BAD_GATEWAY
+                    ),
+                )
+
+        # -------------------------------------------------
+        # COD manual refund recording
+        # -------------------------------------------------
+
+        elif (
+            order.payment_method
+            == "cod"
+        ):
+            manual_refund_reference = str(
+                request.data.get(
+                    "manual_refund_reference",
+                    "",
+                )
+                or ""
+            ).strip()
+
+            if not manual_refund_reference:
+                return_request.refund_status = (
+                    "pending_manual"
+                )
+
+                return_request.save(
+                    update_fields=[
+                        "refund_status",
+                        "updated_at",
+                    ]
+                )
+
+                return Response(
+                    {
+                        "detail": (
+                            "COD refund must be completed "
+                            "manually. Send "
+                            "manual_refund_reference after "
+                            "the customer has been refunded."
+                        )
+                    },
+                    status=(
+                        status
+                        .HTTP_400_BAD_REQUEST
+                    ),
+                )
+
+            refund_id = (
+                manual_refund_reference
+            )
+
+            refund_response = {
+                "type":
+                    "manual_cod_refund",
+                "reference":
+                    manual_refund_reference,
+                "recorded_by":
+                    request.user.pk,
+            }
+
+        # -------------------------------------------------
+        # Other payment methods
+        # -------------------------------------------------
+
+        else:
+            # If another payment method still has a gateway
+            # payment ID, use the configured Razorpay client.
+            gateway_payment_id = str(
+                payment.gateway_payment_id
+                or ""
+            ).strip()
+
+            if not gateway_payment_id:
+                return_request.refund_status = (
+                    "failed"
+                )
+
+                return_request.refund_response = {
+                    "error": (
+                        "No supported gateway payment "
+                        "ID is available."
+                    )
+                }
+
+                return_request.save(
+                    update_fields=[
+                        "refund_status",
+                        "refund_response",
+                        "updated_at",
+                    ]
+                )
+
+                return Response(
+                    {
+                        "detail": (
+                            "Automatic refund is not "
+                            "configured for this payment "
+                            "method."
+                        )
+                    },
+                    status=(
+                        status
+                        .HTTP_400_BAD_REQUEST
+                    ),
+                )
+
+            amount_in_paise = int(
+                refund_amount
+                * 100
+            )
+
+            try:
+                client = (
+                    get_razorpay_client()
+                )
+
+                refund_response = (
+                    client.payment.refund(
+                        gateway_payment_id,
+                        {
+                            "amount":
+                                amount_in_paise,
+                            "notes": {
+                                "order_number":
+                                    order.order_number,
+                                "return_number":
+                                    return_request.return_number,
+                            },
+                        },
+                    )
+                )
+
+                if not isinstance(
+                    refund_response,
+                    dict,
+                ):
+                    refund_response = {
+                        "response":
+                            refund_response,
+                    }
+
+                refund_id = str(
+                    refund_response.get(
+                        "id",
+                        "",
+                    )
+                    or ""
+                ).strip()
+
+                if not refund_id:
+                    raise ValueError(
+                        "Refund response did not "
+                        "contain a refund ID."
+                    )
+
+            except Exception as error:
+                return_request.refund_status = (
+                    "failed"
+                )
+
+                return_request.refund_response = {
+                    "error":
+                        str(
+                            error
+                        ),
+                }
+
+                return_request.save(
+                    update_fields=[
+                        "refund_status",
+                        "refund_response",
+                        "updated_at",
+                    ]
+                )
+
+                return Response(
+                    {
+                        "detail": (
+                            "Unable to process the "
+                            "payment refund."
+                        ),
+                        "error":
+                            str(
+                                error
+                            ),
+                    },
+                    status=(
+                        status
+                        .HTTP_502_BAD_GATEWAY
+                    ),
+                )
+
+        # -------------------------------------------------
+        # Persist successful refund.
+        # -------------------------------------------------
+
+        now = (
+            timezone.now()
+        )
+
+        new_refunded_total = (
+            already_refunded
+            + refund_amount
+        ).quantize(
+            Decimal(
+                "0.01"
+            )
+        )
+
+        fully_refunded = (
+            new_refunded_total
+            >= paid_amount
+        )
+
+        payment.refunded_amount = (
+            new_refunded_total
+        )
+
+        payment.refund_id = (
+            refund_id
+        )
+
+        payment.refund_response = (
+            refund_response
+        )
+
+        if fully_refunded:
+            payment.status = (
+                "refunded"
+            )
+        else:
+            payment.status = (
+                "partially_refunded"
+            )
+
+        if fully_refunded:
+            payment.refunded_at = (
+                now
+            )
+
+        payment.save(
+            update_fields=[
+                "refunded_amount",
+                "refund_id",
+                "refund_response",
+                "status",
+                "refunded_at",
+                "updated_at",
+            ]
+        )
+
+        return_request.status = (
+            "refunded"
+        )
+
+        return_request.refund_id = (
+            refund_id
+        )
+
+        return_request.refund_status = (
+            "refunded"
+        )
+
+        return_request.refund_response = (
+            refund_response
+        )
+
+        return_request.refunded_at = (
+            now
+        )
+
+        return_request.processed_by = (
+            request.user
+        )
+
+        return_request.save(
+            update_fields=[
+                "status",
+                "refund_amount",
+                "refund_id",
+                "refund_status",
+                "refund_response",
+                "refunded_at",
+                "processed_by",
+                "updated_at",
+            ]
+        )
+
+        if fully_refunded:
+            order.payment_status = (
+                "refunded"
+            )
+
+            order.status = (
+                "refunded"
+            )
+
+        else:
+            order.payment_status = (
+                "partially_refunded"
+            )
+
+            order.status = (
+                "returned"
+            )
+
+        order.save(
+            update_fields=[
+                "payment_status",
+                "status",
+                "updated_at",
+            ]
+        )
+
+        # -------------------------------------------------
+        # Fresh response
+        # -------------------------------------------------
+
+        fresh_request = (
+            ReturnRequest.objects
+            .select_related(
+                "order",
+                "user",
+                "processed_by",
+            )
+            .prefetch_related(
+                "items",
+                "items__order_item",
+                "items__order_item__product",
+                "items__order_item__variant",
+                "items__replacement_variant",
+            )
+            .get(
+                pk=return_request.pk,
+            )
+        )
+
+        return Response(
+            {
+                "message": (
+                    "Refund processed successfully."
+                ),
+                "refund": {
+                    "refund_id":
+                        refund_id,
+                    "refund_amount":
+                        refund_amount,
+                    "payment_status":
+                        order.payment_status,
+                    "fully_refunded":
+                        fully_refunded,
+                },
+                "return_request":
+                    ReturnRequestSerializer(
+                        fresh_request,
+                        context={
+                            "request":
+                                request,
+                        },
+                    ).data,
             },
             status=(
                 status

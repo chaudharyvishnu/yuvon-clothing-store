@@ -476,45 +476,39 @@ class PaymentSerializer(
             "amount",
             "currency",
             "status",
+
             "transaction_id",
             "gateway_order_id",
             "gateway_payment_id",
             "gateway_signature",
+
+            # Refund
+            "refunded_amount",
+            "refund_id",
+            "refunded_at",
+
+            # Payment Failure
             "failure_code",
             "failure_description",
             "failure_source",
             "failure_step",
             "failure_reason",
+
+            # Gateway
             "gateway_response",
+            "refund_response",
+
+            # Timeline
             "paid_at",
             "created_at",
             "updated_at",
+
+            # Helpers
             "is_successful",
             "is_refunded",
         )
 
-        read_only_fields = (
-            "id",
-            "payment_method",
-            "amount",
-            "currency",
-            "status",
-            "transaction_id",
-            "gateway_order_id",
-            "gateway_payment_id",
-            "gateway_signature",
-            "failure_code",
-            "failure_description",
-            "failure_source",
-            "failure_step",
-            "failure_reason",
-            "gateway_response",
-            "paid_at",
-            "created_at",
-            "updated_at",
-            "is_successful",
-            "is_refunded",
-        )
+        read_only_fields = fields
 
 
 # =========================================================
@@ -2977,6 +2971,172 @@ class ReturnItemSerializer(
             "created_at",
             "updated_at",
         )
+
+
+# =========================================================
+# Admin Return Item Inspection
+# =========================================================
+
+class AdminReturnItemInspectionSerializer(
+    serializers.ModelSerializer
+):
+
+    inspection_status = serializers.CharField(
+        required=True,
+        allow_blank=False,
+        max_length=50,
+    )
+
+    inspection_note = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+
+    is_accepted = serializers.BooleanField(
+        required=True,
+    )
+
+    class Meta:
+
+        model = ReturnItem
+
+        fields = (
+            "id",
+            "inspection_status",
+            "inspection_note",
+            "is_accepted",
+            "refund_amount",
+            "updated_at",
+        )
+
+        read_only_fields = (
+            "id",
+            "refund_amount",
+            "updated_at",
+        )
+
+    def validate_inspection_status(
+        self,
+        value,
+    ):
+
+        value = str(
+            value or ""
+        ).strip().lower()
+
+        allowed_statuses = {
+            "pending",
+            "approved",
+            "rejected",
+            "passed",
+            "failed",
+        }
+
+        if value not in allowed_statuses:
+
+            raise serializers.ValidationError(
+                (
+                    "Inspection status must be one of: "
+                    "pending, approved, rejected, "
+                    "passed, failed."
+                )
+            )
+
+        return value
+
+    def validate(
+        self,
+        attrs,
+    ):
+
+        is_accepted = (
+            attrs.get(
+                "is_accepted"
+            )
+        )
+
+        inspection_status = (
+            attrs.get(
+                "inspection_status"
+            )
+        )
+
+        if (
+            is_accepted is True
+            and inspection_status
+            in {
+                "rejected",
+                "failed",
+            }
+        ):
+
+            raise serializers.ValidationError(
+                {
+                    "inspection_status": (
+                        "An accepted item cannot have "
+                        "a rejected or failed "
+                        "inspection status."
+                    )
+                }
+            )
+
+        if (
+            is_accepted is False
+            and inspection_status
+            in {
+                "approved",
+                "passed",
+            }
+        ):
+
+            raise serializers.ValidationError(
+                {
+                    "inspection_status": (
+                        "A rejected item cannot have "
+                        "an approved or passed "
+                        "inspection status."
+                    )
+                }
+            )
+
+        return attrs
+
+    @transaction.atomic
+    def update(
+        self,
+        instance,
+        validated_data,
+    ):
+
+        instance.inspection_status = (
+            validated_data[
+                "inspection_status"
+            ]
+        )
+
+        instance.inspection_note = (
+            validated_data.get(
+                "inspection_note",
+                instance.inspection_note,
+            )
+        )
+
+        instance.is_accepted = (
+            validated_data[
+                "is_accepted"
+            ]
+        )
+
+        instance.save(
+            update_fields=[
+                "inspection_status",
+                "inspection_note",
+                "is_accepted",
+                "updated_at",
+            ]
+        )
+
+        return instance
 
 
 # =========================================================

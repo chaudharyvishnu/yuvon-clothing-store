@@ -9,8 +9,10 @@ from .views import (
     AdminOrderUpdateView,
 
     # Return / Exchange Admin Views
+    AdminReturnItemInspectionView,
     AdminReturnRequestDetailView,
     AdminReturnRequestListView,
+    AdminReturnRequestRefundView,
     AdminReturnRequestStatusUpdateView,
 
     # Shiprocket Admin Views
@@ -170,6 +172,33 @@ urlpatterns = [
         AdminReturnRequestStatusUpdateView.as_view(),
         name="admin-return-request-status",
     ),
+
+    # =====================================================
+    # Admin Return / Exchange - Item Inspection
+    #
+    # IMPORTANT:
+    # This specific route must stay BEFORE the generic
+    # admin/returns/<return_number>/ detail route.
+    # =====================================================
+    path(
+        "admin/returns/<str:return_number>/items/<int:item_id>/inspection/",
+        AdminReturnItemInspectionView.as_view(),
+        name="admin-return-item-inspection",
+    ),
+
+    # =====================================================
+    # Admin Return - Refund Processing
+    #
+    # IMPORTANT:
+    # This route must also stay BEFORE the generic
+    # admin/returns/<return_number>/ detail route.
+    # =====================================================
+    path(
+        "admin/returns/<str:return_number>/refund/",
+        AdminReturnRequestRefundView.as_view(),
+        name="admin-return-request-refund",
+    ),
+
     path(
         "admin/returns/<str:return_number>/",
         AdminReturnRequestDetailView.as_view(),
