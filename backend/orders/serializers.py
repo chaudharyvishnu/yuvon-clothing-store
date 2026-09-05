@@ -2996,6 +2996,13 @@ class AdminReturnItemInspectionSerializer(
         required=True,
     )
 
+    refund_amount = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        required=False,
+        min_value=Decimal("0.00"),
+    )
+
     class Meta:
 
         model = ReturnItem
@@ -3011,9 +3018,12 @@ class AdminReturnItemInspectionSerializer(
 
         read_only_fields = (
             "id",
-            "refund_amount",
             "updated_at",
         )
+
+    # =====================================================
+    # Inspection Status Validation
+    # =====================================================
 
     def validate_inspection_status(
         self,
@@ -3044,22 +3054,68 @@ class AdminReturnItemInspectionSerializer(
 
         return value
 
+    # =====================================================
+    # Full Validation
+    # =====================================================
+
     def validate(
         self,
         attrs,
     ):
 
+        instance = (
+            self.instance
+        )
+
         is_accepted = (
             attrs.get(
-                "is_accepted"
+                "is_accepted",
+                (
+                    instance.is_accepted
+                    if instance
+                    else None
+                ),
             )
         )
 
         inspection_status = (
             attrs.get(
-                "inspection_status"
+                "inspection_status",
+                (
+                    instance.inspection_status
+                    if instance
+                    else ""
+                ),
             )
         )
+
+        refund_amount = (
+            attrs.get(
+                "refund_amount",
+                (
+                    instance.refund_amount
+                    if instance
+                    else Decimal(
+                        "0.00"
+                    )
+                ),
+            )
+        )
+
+        refund_amount = (
+            to_decimal(
+                refund_amount
+            )
+            .quantize(
+                Decimal(
+                    "0.01"
+                )
+            )
+        )
+
+        # =================================================
+        # Accepted Item Cannot Be Failed / Rejected
+        # =================================================
 
         if (
             is_accepted is True
@@ -3080,6 +3136,10 @@ class AdminReturnItemInspectionSerializer(
                 }
             )
 
+        # =================================================
+        # Rejected Item Cannot Be Approved / Passed
+        # =================================================
+
         if (
             is_accepted is False
             and inspection_status
@@ -3099,7 +3159,72 @@ class AdminReturnItemInspectionSerializer(
                 }
             )
 
+        # =================================================
+        # Accepted Return Requires Positive Refund Amount
+        # =================================================
+
+        if (
+            instance
+            and instance.return_request
+            and instance.return_request.request_type
+            == "return"
+            and is_accepted is True
+            and inspection_status
+            in {
+                "approved",
+                "passed",
+            }
+            and refund_amount
+            <= Decimal(
+                "0.00"
+            )
+        ):
+
+            raise serializers.ValidationError(
+                {
+                    "refund_amount": (
+                        "Accepted return items require "
+                        "a positive approved refund amount."
+                    )
+                }
+            )
+
+        # =================================================
+        # Rejected Item Must Have Zero Refund
+        # =================================================
+
+        if (
+            is_accepted is False
+        ):
+
+            attrs[
+                "refund_amount"
+            ] = Decimal(
+                "0.00"
+            )
+
+        # =================================================
+        # Exchange Does Not Use Refund Amount Here
+        # =================================================
+
+        if (
+            instance
+            and instance.return_request
+            and instance.return_request.request_type
+            == "exchange"
+        ):
+
+            attrs[
+                "refund_amount"
+            ] = Decimal(
+                "0.00"
+            )
+
         return attrs
+
+    # =====================================================
+    # Update
+    # =====================================================
 
     @transaction.atomic
     def update(
@@ -3127,17 +3252,55 @@ class AdminReturnItemInspectionSerializer(
             ]
         )
 
+        # =================================================
+        # Refund Amount
+        # =================================================
+
+        if (
+            instance.return_request
+            .request_type
+            == "return"
+            and instance.is_accepted
+            is True
+        ):
+
+            instance.refund_amount = (
+                to_decimal(
+                    validated_data.get(
+                        "refund_amount",
+                        instance.refund_amount,
+                    )
+                )
+                .quantize(
+                    Decimal(
+                        "0.01"
+                    )
+                )
+            )
+
+        else:
+
+            instance.refund_amount = (
+                Decimal(
+                    "0.00"
+                )
+            )
+
+        # =================================================
+        # Save
+        # =================================================
+
         instance.save(
             update_fields=[
                 "inspection_status",
                 "inspection_note",
                 "is_accepted",
+                "refund_amount",
                 "updated_at",
             ]
         )
 
         return instance
-
 
 # =========================================================
 # Return / Exchange Detail

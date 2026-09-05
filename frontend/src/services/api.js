@@ -2694,6 +2694,10 @@ export async function fetchAdminReturnRequestDetail(
 }
 
 
+// =========================================================
+// Admin Return / Exchange Status Update
+// =========================================================
+
 export async function updateAdminReturnRequestStatus(
   returnNumber,
   payload
@@ -2733,13 +2737,112 @@ export async function updateAdminReturnRequestStatus(
 
 
 // =========================================================
-// Admin Orders
+// Admin Return Item Inspection
+//
+// Backend:
+// PATCH
+// /api/orders/admin/returns/
+// <return_number>/items/<item_id>/inspection/
+//
+// Example payload:
+// {
+//   inspection_status: "approved",
+//   inspection_note: "Item inspected successfully.",
+//   is_accepted: true
+// }
 // =========================================================
 
+export async function updateAdminReturnItemInspection(
+  returnNumber,
+  itemId,
+  payload
+) {
+  requireValue(
+    returnNumber,
+    "Return request number is required."
+  );
 
+
+  requireValue(
+    itemId,
+    "Return item ID is required."
+  );
+
+
+  if (
+    !payload ||
+    typeof payload !==
+      "object" ||
+    Array.isArray(
+      payload
+    )
+  ) {
+    throw new Error(
+      "Inspection update data is required."
+    );
+  }
+
+
+  return apiRequest(
+    `/orders/admin/returns/${encodeURIComponent(
+      returnNumber
+    )}/items/${encodeURIComponent(
+      itemId
+    )}/inspection/`,
+    {
+      method:
+        "PATCH",
+
+      body:
+        JSON.stringify(
+          payload
+        ),
+    }
+  );
+}
 // =========================================================
-// Admin Orders
+// Admin Return Refund Processing
 // =========================================================
+
+export async function processAdminReturnRefund(
+  returnNumber,
+  payload = {}
+) {
+  requireValue(
+    returnNumber,
+    "Return request number is required."
+  );
+
+
+  if (
+    payload === null ||
+    typeof payload !==
+      "object" ||
+    Array.isArray(
+      payload
+    )
+  ) {
+    throw new Error(
+      "Refund processing data must be an object."
+    );
+  }
+
+
+  return apiRequest(
+    `/orders/admin/returns/${encodeURIComponent(
+      returnNumber
+    )}/refund/`,
+    {
+      method:
+        "POST",
+
+      body:
+        JSON.stringify(
+          payload
+        ),
+    }
+  );
+}
 
 
 // =========================================================
