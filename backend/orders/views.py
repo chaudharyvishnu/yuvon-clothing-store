@@ -345,6 +345,711 @@ def restore_cancelled_order_resources(order):
         )
 
 
+
+
+# =========================================================
+# Return Inventory Restore Helper
+# =========================================================
+
+def restore_returned_items_to_inventory(
+    return_request,
+    processed_by=None,
+):
+    """
+    Restore accepted returned items back to inventory exactly once
+    after a successful refund.
+
+    Rules:
+    - Only accepted return items are restored.
+    - Items without a variant are skipped.
+    - Duplicate stock restoration is prevented per ReturnItem.
+    - Low-stock alerts are recalculated after stock restoration.
+    """
+
+    if (
+        return_request is None
+        or return_request.request_type != "return"
+    ):
+        return
+
+    settings_obj = InventorySettings.load()
+
+    if not settings_obj.auto_restore_on_return:
+        return
+
+    return_items = (
+        ReturnItem.objects
+        .select_related(
+            "order_item",
+            "order_item__variant",
+            "order_item__product",
+        )
+        .filter(
+            return_request=return_request,
+            is_accepted=True,
+        )
+    )
+
+    for return_item in return_items:
+        order_item = return_item.order_item
+
+        if (
+            order_item is None
+            or order_item.variant_id is None
+        ):
+            continue
+
+        quantity = max(
+            0,
+            int(
+                return_item.quantity
+                or 0
+            ),
+        )
+
+        if quantity == 0:
+            continue
+
+        # -------------------------------------------------
+        # Prevent duplicate stock restore for this ReturnItem
+        # -------------------------------------------------
+
+        already_restored = (
+            InventoryTransaction.objects
+            .filter(
+                order=return_request.order,
+                order_item=order_item,
+                transaction_type="return",
+                metadata__return_item_id=return_item.id,
+            )
+            .exists()
+        )
+
+        if already_restored:
+            continue
+
+        # -------------------------------------------------
+        # Lock current variant row
+        # -------------------------------------------------
+
+        variant = (
+            ProductVariant.objects
+            .select_for_update()
+            .select_related(
+                "product"
+            )
+            .filter(
+                pk=order_item.variant_id
+            )
+            .first()
+        )
+
+        if variant is None:
+            continue
+
+        stock_before = int(
+            variant.stock
+            or 0
+        )
+
+        stock_after = (
+            stock_before
+            + quantity
+        )
+
+        variant.stock = stock_after
+
+        variant.save(
+            update_fields=[
+                "stock",
+            ]
+        )
+
+        # -------------------------------------------------
+        # Record inventory movement
+        # -------------------------------------------------
+
+        InventoryTransaction.objects.create(
+            variant=variant,
+            product=variant.product,
+            order=return_request.order,
+            order_item=order_item,
+            transaction_type="return",
+            quantity_change=quantity,
+            stock_before=stock_before,
+            reference=return_request.return_number,
+            note=(
+                "Stock restored after successful "
+                "customer return refund."
+            ),
+            metadata={
+                "source":
+                    "customer_return",
+                "return_number":
+                    return_request.return_number,
+                "return_request_id":
+                    return_request.id,
+                "return_item_id":
+                    return_item.id,
+            },
+            created_by=processed_by,
+        )
+
+        sync_low_stock_alert(
+            variant
+        )
+
+
+
+# =========================================================
+# Exchange Inventory Processing Helper
+# =========================================================
+
+def process_exchange_inventory(
+    return_request,
+    processed_by=None,
+):
+    """
+    Process inventory movements for an accepted exchange exactly once.
+
+    This helper is intended to run when an exchange reaches
+    ``exchange_shipped``.
+
+    Inventory movements:
+    - Original accepted variant: stock IN using ``exchange_return``.
+    - Replacement variant: stock OUT using ``exchange_out``.
+
+    Safety rules:
+    - Only exchange requests are processed.
+    - Every exchange item must have been inspected first.
+    - At least one item must be accepted.
+    - Every accepted item must have both an original variant and a
+      concrete replacement_variant.
+    - Replacement stock is validated before any stock is changed.
+    - Duplicate processing is prevented per ReturnItem and movement type.
+    - Variant rows are locked in a stable order.
+    - Low-stock alerts are synchronized after inventory changes.
+
+    Returns:
+        (True, summary_dict) on success.
+        (False, error_message) when business validation fails.
+
+    The caller must execute this helper inside transaction.atomic().
+    """
+
+    if (
+        return_request is None
+        or return_request.request_type != "exchange"
+    ):
+        return (
+            False,
+            "Exchange inventory processing is only available "
+            "for exchange requests.",
+        )
+
+    all_items = list(
+        ReturnItem.objects
+        .select_related(
+            "order_item",
+            "order_item__variant",
+            "order_item__product",
+            "replacement_variant",
+            "replacement_variant__product",
+        )
+        .filter(
+            return_request=return_request,
+        )
+        .order_by(
+            "id"
+        )
+    )
+
+    if not all_items:
+        return (
+            False,
+            "This exchange request does not contain any items.",
+        )
+
+    # -----------------------------------------------------
+    # Every item must be inspected before replacement ships
+    # -----------------------------------------------------
+
+    for return_item in all_items:
+        inspection_status = str(
+            return_item.inspection_status
+            or ""
+        ).strip()
+
+        if (
+            not inspection_status
+            or return_item.is_accepted is None
+        ):
+            return (
+                False,
+                "Complete item inspection before shipping "
+                "the exchange replacement.",
+            )
+
+    accepted_items = [
+        return_item
+        for return_item in all_items
+        if return_item.is_accepted is True
+    ]
+
+    if not accepted_items:
+        return (
+            False,
+            "At least one exchange item must be accepted "
+            "before shipping a replacement.",
+        )
+
+    movement_plan = []
+
+    incoming_by_variant = {}
+    outgoing_by_variant = {}
+    required_variant_ids = set()
+
+    # -----------------------------------------------------
+    # Build an idempotent movement plan
+    # -----------------------------------------------------
+
+    for return_item in accepted_items:
+        order_item = return_item.order_item
+
+        if (
+            order_item is None
+            or order_item.variant_id is None
+        ):
+            return (
+                False,
+                (
+                    f"Return item {return_item.id} does not have "
+                    "an original product variant to restore."
+                ),
+            )
+
+        if return_item.replacement_variant_id is None:
+            return (
+                False,
+                (
+                    f"Return item {return_item.id} does not have "
+                    "a replacement variant selected."
+                ),
+            )
+
+        quantity = max(
+            0,
+            int(
+                return_item.quantity
+                or 0
+            ),
+        )
+
+        if quantity <= 0:
+            return (
+                False,
+                (
+                    f"Return item {return_item.id} has an invalid "
+                    "exchange quantity."
+                ),
+            )
+
+        # Replacement variant must still belong to the same product.
+        if (
+            order_item.product_id
+            and return_item.replacement_variant.product_id
+            != order_item.product_id
+        ):
+            return (
+                False,
+                (
+                    f"Replacement variant for return item "
+                    f"{return_item.id} does not belong to "
+                    "the original product."
+                ),
+            )
+
+        return_already_recorded = (
+            InventoryTransaction.objects
+            .filter(
+                order=return_request.order,
+                order_item=order_item,
+                transaction_type="exchange_return",
+                metadata__return_item_id=return_item.id,
+            )
+            .exists()
+        )
+
+        replacement_already_recorded = (
+            InventoryTransaction.objects
+            .filter(
+                order=return_request.order,
+                order_item=order_item,
+                transaction_type="exchange_out",
+                metadata__return_item_id=return_item.id,
+            )
+            .exists()
+        )
+
+        original_variant_id = (
+            order_item.variant_id
+        )
+
+        replacement_variant_id = (
+            return_item.replacement_variant_id
+        )
+
+        if not return_already_recorded:
+            incoming_by_variant[
+                original_variant_id
+            ] = (
+                incoming_by_variant.get(
+                    original_variant_id,
+                    0,
+                )
+                + quantity
+            )
+
+            required_variant_ids.add(
+                original_variant_id
+            )
+
+        if not replacement_already_recorded:
+            outgoing_by_variant[
+                replacement_variant_id
+            ] = (
+                outgoing_by_variant.get(
+                    replacement_variant_id,
+                    0,
+                )
+                + quantity
+            )
+
+            required_variant_ids.add(
+                replacement_variant_id
+            )
+
+        movement_plan.append(
+            {
+                "return_item":
+                    return_item,
+                "order_item":
+                    order_item,
+                "quantity":
+                    quantity,
+                "original_variant_id":
+                    original_variant_id,
+                "replacement_variant_id":
+                    replacement_variant_id,
+                "restore_original":
+                    not return_already_recorded,
+                "deduct_replacement":
+                    not replacement_already_recorded,
+            }
+        )
+
+    # Everything has already been processed.
+    if not required_variant_ids:
+        return (
+            True,
+            {
+                "already_processed":
+                    True,
+                "restored_quantity":
+                    0,
+                "replacement_quantity":
+                    0,
+            },
+        )
+
+    # -----------------------------------------------------
+    # Lock all variants in a stable order
+    # -----------------------------------------------------
+
+    locked_variants = {
+        variant.pk:
+            variant
+        for variant in (
+            ProductVariant.objects
+            .select_for_update()
+            .select_related(
+                "product"
+            )
+            .filter(
+                pk__in=required_variant_ids
+            )
+            .order_by(
+                "pk"
+            )
+        )
+    }
+
+    missing_variant_ids = (
+        required_variant_ids
+        - set(
+            locked_variants.keys()
+        )
+    )
+
+    if missing_variant_ids:
+        return (
+            False,
+            "One or more exchange product variants no longer exist.",
+        )
+
+    # -----------------------------------------------------
+    # Validate replacement availability BEFORE stock changes
+    #
+    # Incoming accepted exchange stock is included because it
+    # is restored in the same atomic transaction before the
+    # corresponding replacement stock is deducted.
+    # -----------------------------------------------------
+
+    for (
+        variant_id,
+        outgoing_quantity,
+    ) in outgoing_by_variant.items():
+        variant = (
+            locked_variants[
+                variant_id
+            ]
+        )
+
+        available_quantity = (
+            int(
+                variant.stock
+                or 0
+            )
+            + int(
+                incoming_by_variant.get(
+                    variant_id,
+                    0,
+                )
+            )
+        )
+
+        if (
+            available_quantity
+            < outgoing_quantity
+        ):
+            return (
+                False,
+                (
+                    f"Insufficient replacement stock for "
+                    f"{variant}. Available: "
+                    f"{available_quantity}, required: "
+                    f"{outgoing_quantity}."
+                ),
+            )
+
+    restored_quantity = 0
+    replacement_quantity = 0
+    touched_variant_ids = set()
+
+    # -----------------------------------------------------
+    # Apply stock movements
+    # -----------------------------------------------------
+
+    for movement in movement_plan:
+        return_item = (
+            movement[
+                "return_item"
+            ]
+        )
+
+        order_item = (
+            movement[
+                "order_item"
+            ]
+        )
+
+        quantity = (
+            movement[
+                "quantity"
+            ]
+        )
+
+        # -------------------------------------------------
+        # Original accepted item -> stock IN
+        # -------------------------------------------------
+
+        if movement[
+            "restore_original"
+        ]:
+            original_variant = (
+                locked_variants[
+                    movement[
+                        "original_variant_id"
+                    ]
+                ]
+            )
+
+            stock_before = int(
+                original_variant.stock
+                or 0
+            )
+
+            original_variant.stock = (
+                stock_before
+                + quantity
+            )
+
+            original_variant.save(
+                update_fields=[
+                    "stock",
+                ]
+            )
+
+            InventoryTransaction.objects.create(
+                variant=original_variant,
+                product=original_variant.product,
+                order=return_request.order,
+                order_item=order_item,
+                transaction_type="exchange_return",
+                quantity_change=quantity,
+                stock_before=stock_before,
+                reference=return_request.return_number,
+                note=(
+                    "Accepted exchange item restored "
+                    "to inventory."
+                ),
+                metadata={
+                    "source":
+                        "customer_exchange",
+                    "movement":
+                        "original_return",
+                    "return_number":
+                        return_request.return_number,
+                    "return_request_id":
+                        return_request.id,
+                    "return_item_id":
+                        return_item.id,
+                    "replacement_variant_id":
+                        return_item.replacement_variant_id,
+                },
+                created_by=processed_by,
+            )
+
+            restored_quantity += (
+                quantity
+            )
+
+            touched_variant_ids.add(
+                original_variant.pk
+            )
+
+        # -------------------------------------------------
+        # Replacement item -> stock OUT
+        # -------------------------------------------------
+
+        if movement[
+            "deduct_replacement"
+        ]:
+            replacement_variant = (
+                locked_variants[
+                    movement[
+                        "replacement_variant_id"
+                    ]
+                ]
+            )
+
+            stock_before = int(
+                replacement_variant.stock
+                or 0
+            )
+
+            stock_after = (
+                stock_before
+                - quantity
+            )
+
+            # This is also checked during pre-validation.
+            # Keep this guard in case inventory logic changes.
+            if stock_after < 0:
+                raise ValueError(
+                    "Replacement stock became negative "
+                    "during exchange processing."
+                )
+
+            replacement_variant.stock = (
+                stock_after
+            )
+
+            replacement_variant.save(
+                update_fields=[
+                    "stock",
+                ]
+            )
+
+            InventoryTransaction.objects.create(
+                variant=replacement_variant,
+                product=replacement_variant.product,
+                order=return_request.order,
+                order_item=order_item,
+                transaction_type="exchange_out",
+                quantity_change=(
+                    -quantity
+                ),
+                stock_before=stock_before,
+                reference=return_request.return_number,
+                note=(
+                    "Replacement stock deducted when "
+                    "exchange shipment was dispatched."
+                ),
+                metadata={
+                    "source":
+                        "customer_exchange",
+                    "movement":
+                        "replacement_out",
+                    "return_number":
+                        return_request.return_number,
+                    "return_request_id":
+                        return_request.id,
+                    "return_item_id":
+                        return_item.id,
+                    "original_variant_id":
+                        order_item.variant_id,
+                    "replacement_variant_id":
+                        replacement_variant.pk,
+                },
+                created_by=processed_by,
+            )
+
+            replacement_quantity += (
+                quantity
+            )
+
+            touched_variant_ids.add(
+                replacement_variant.pk
+            )
+
+    # -----------------------------------------------------
+    # Recalculate low-stock alerts after final stock values
+    # -----------------------------------------------------
+
+    for variant_id in sorted(
+        touched_variant_ids
+    ):
+        sync_low_stock_alert(
+            locked_variants[
+                variant_id
+            ]
+        )
+
+    return (
+        True,
+        {
+            "already_processed":
+                False,
+            "restored_quantity":
+                restored_quantity,
+            "replacement_quantity":
+                replacement_quantity,
+        },
+    )
+
+
+
 # =========================================================
 # COD Payment Helper
 # =========================================================
@@ -4357,6 +5062,125 @@ class AdminReturnRequestStatusUpdateView(
                 ),
             )
 
+        # -------------------------------------------------
+        # Exchange-only status protection
+        # -------------------------------------------------
+
+        if (
+            new_status
+            in {
+                "exchange_pending",
+                "exchange_shipped",
+            }
+            and return_request.request_type
+            != "exchange"
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "Exchange statuses can only be used "
+                        "for exchange requests."
+                    )
+                },
+                status=(
+                    status
+                    .HTTP_400_BAD_REQUEST
+                ),
+            )
+
+        # -------------------------------------------------
+        # Do not roll an exchange backwards after inventory
+        # has already moved at exchange_shipped.
+        # -------------------------------------------------
+
+        if (
+            return_request.request_type
+            == "exchange"
+            and return_request.status
+            == "exchange_shipped"
+            and new_status
+            not in {
+                "exchange_shipped",
+                "completed",
+            }
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "An exchange that has already been "
+                        "shipped cannot be moved back to an "
+                        "earlier workflow status."
+                    )
+                },
+                status=(
+                    status
+                    .HTTP_400_BAD_REQUEST
+                ),
+            )
+
+        # -------------------------------------------------
+        # Exchange inventory movement
+        #
+        # The accepted original item is restored and the
+        # replacement variant is deducted exactly once when
+        # the replacement shipment is marked shipped.
+        # -------------------------------------------------
+
+        exchange_inventory_result = None
+
+        if (
+            return_request.request_type
+            == "exchange"
+            and new_status
+            == "exchange_shipped"
+        ):
+            exchange_inventory_ok, exchange_inventory_result = (
+                process_exchange_inventory(
+                    return_request=return_request,
+                    processed_by=request.user,
+                )
+            )
+
+            if not exchange_inventory_ok:
+                return Response(
+                    {
+                        "detail":
+                            exchange_inventory_result,
+                    },
+                    status=(
+                        status
+                        .HTTP_400_BAD_REQUEST
+                    ),
+                )
+
+        # -------------------------------------------------
+        # Exchange completion protection
+        # -------------------------------------------------
+
+        if (
+            return_request.request_type
+            == "exchange"
+            and new_status
+            == "completed"
+            and return_request.status
+            not in {
+                "exchange_shipped",
+                "completed",
+            }
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "Mark the exchange as shipped before "
+                        "completing the exchange request."
+                    )
+                },
+                status=(
+                    status
+                    .HTTP_400_BAD_REQUEST
+                ),
+            )
+
         now = timezone.now()
 
         return_request.status = (
@@ -4579,15 +5403,27 @@ class AdminReturnRequestStatusUpdateView(
             )
         )
 
+        response_data = {
+            "message": (
+                "Return / exchange status "
+                "updated successfully."
+            ),
+            "return_request":
+                response_serializer.data,
+        }
+
+        if (
+            exchange_inventory_result
+            is not None
+        ):
+            response_data[
+                "exchange_inventory"
+            ] = (
+                exchange_inventory_result
+            )
+
         return Response(
-            {
-                "message": (
-                    "Return / exchange status "
-                    "updated successfully."
-                ),
-                "return_request":
-                    response_serializer.data,
-            },
+            response_data,
             status=(
                 status
                 .HTTP_200_OK
@@ -5746,6 +6582,15 @@ class AdminReturnRequestRefundView(
                 "status",
                 "updated_at",
             ]
+        )
+
+        # -------------------------------------------------
+        # Restore accepted returned items to inventory
+        # -------------------------------------------------
+
+        restore_returned_items_to_inventory(
+            return_request=return_request,
+            processed_by=request.user,
         )
 
         # -------------------------------------------------
