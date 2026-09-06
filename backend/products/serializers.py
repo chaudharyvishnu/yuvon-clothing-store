@@ -296,10 +296,114 @@ class ProductBaseSerializer(
         self,
         obj,
     ):
-        return build_file_url(
+        """
+        Return product main image URL.
+
+        Fallback:
+        If Product.main_image is empty, use the first
+        available gallery image.
+        """
+
+        # -------------------------------------------------
+        # 1. Product Main Image
+        # -------------------------------------------------
+
+        main_image_url = build_file_url(
             self,
-            obj.main_image,
+            getattr(
+                obj,
+                "main_image",
+                None,
+            ),
         )
+
+        if main_image_url:
+            return main_image_url
+
+        # -------------------------------------------------
+        # 2. Gallery Image Fallback
+        # -------------------------------------------------
+
+        prefetched_images = (
+            getattr(
+                obj,
+                "_prefetched_objects_cache",
+                {},
+            ).get(
+                "images"
+            )
+        )
+
+        first_image = None
+
+        if (
+            prefetched_images
+            is not None
+        ):
+            available_images = [
+                image
+                for image
+                in prefetched_images
+                if getattr(
+                    image,
+                    "image",
+                    None,
+                )
+            ]
+
+            if available_images:
+                available_images.sort(
+                    key=lambda image: (
+                        int(
+                            getattr(
+                                image,
+                                "order",
+                                0,
+                            )
+                            or 0
+                        ),
+                        int(
+                            getattr(
+                                image,
+                                "id",
+                                0,
+                            )
+                            or 0
+                        ),
+                    )
+                )
+
+                first_image = (
+                    available_images[0]
+                )
+
+        else:
+            first_image = (
+                obj.images
+                .exclude(
+                    image="",
+                )
+                .order_by(
+                    "order",
+                    "id",
+                )
+                .first()
+            )
+
+        if (
+            first_image
+            and getattr(
+                first_image,
+                "image",
+                None,
+            )
+        ):
+            return build_file_url(
+                self,
+                first_image.image,
+            )
+
+        return None
 
     # =====================================================
     # Pricing / Discount
