@@ -320,6 +320,7 @@ INSTALLED_APPS = [
     "coupons",
     "inventory",
     "dashboard",
+    "reports",
     "core",
 ]
 

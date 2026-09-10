@@ -62,10 +62,11 @@ import Checkout from "./pages/Checkout";
 
 
 // =========================================================
-// Admin Dashboard
+// Admin Dashboard / Reports
 // =========================================================
 
 import Dashboard from "./pages/admin/Dashboard";
+import Reports from "./pages/admin/Reports";
 
 
 // =========================================================
@@ -280,6 +281,20 @@ function App() {
               element={
                 <AdminRoute>
                   <Dashboard />
+                </AdminRoute>
+              }
+            />
+
+
+            {/* ==========================================
+                Admin Reports
+            ========================================== */}
+
+            <Route
+              path="/admin/reports"
+              element={
+                <AdminRoute>
+                  <Reports />
                 </AdminRoute>
               }
             />
